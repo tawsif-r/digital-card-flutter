@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../providers/cards_provider.dart';
 import '../../../core/router/routes.dart';
+import '../../../core/theme/theme_provider.dart';
 import '../../../shared/widgets/card_widget.dart';
 import '../../share/screens/share_bottom_sheet.dart';
 
@@ -36,6 +37,12 @@ class CardDetailScreen extends ConsumerWidget {
           appBar: AppBar(
             title: Text(card.data.name),
             actions: [
+              IconButton(
+                icon: Icon(ref.watch(themeProvider) == ThemeMode.dark
+                    ? Icons.light_mode_outlined
+                    : Icons.dark_mode_outlined),
+                onPressed: () => ref.read(themeProvider.notifier).toggle(),
+              ),
               IconButton(
                 icon: const Icon(Icons.edit_outlined),
                 onPressed: () => context.push(Routes.cardEditPath(cardId)),

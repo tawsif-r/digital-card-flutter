@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/card_repository.dart';
 import '../domain/card_model.dart';
@@ -19,25 +20,42 @@ class CardsNotifier extends AsyncNotifier<List<CardModel>> {
     state = await AsyncValue.guard(() => ref.read(cardRepositoryProvider).getAll());
   }
 
-  Future<CardModel?> createCard(CardData data) async {
+  Future<(CardModel?, String?)> createCard(CardData data) async {
     try {
       final card = await ref.read(cardRepositoryProvider).create(data);
       state = AsyncData([card, ...state.valueOrNull ?? []]);
-      return card;
+      return (card, null);
     } catch (e) {
-      return null;
+      return (null, _extractError(e));
     }
   }
 
-  Future<bool> updateCard(String id, CardData data) async {
+  Future<(bool, String?)> updateCard(String id, CardData data) async {
     try {
       final updated = await ref.read(cardRepositoryProvider).update(id, data);
       final current = state.valueOrNull ?? [];
       state = AsyncData(current.map((c) => c.id == id ? updated : c).toList());
-      return true;
-    } catch (_) {
-      return false;
+      return (true, null);
+    } catch (e) {
+      return (false, _extractError(e));
     }
+  }
+
+  String _extractError(Object e) {
+    if (e is DioException) {
+      final data = e.response?.data;
+      if (data is Map) {
+        final msg = data['message'];
+        if (msg is String) return msg;
+        if (msg is List && msg.isNotEmpty) return msg.join(', ');
+        if (msg is Map) return msg['message']?.toString() ?? 'Validation error.';
+      }
+      final status = e.response?.statusCode;
+      if (status == 401) return 'Session expired. Please log in again.';
+      if (status == 403) return 'Permission denied.';
+      if (status == 400) return 'Validation error: check your fields.';
+    }
+    return 'Failed to save. Try again.';
   }
 
   Future<bool> deleteCard(String id) async {

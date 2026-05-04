@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../providers/cards_provider.dart';
 import '../domain/card_model.dart';
 import '../../../core/router/routes.dart';
-import '../../../features/auth/providers/auth_provider.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/card_widget.dart';
 import '../../../shared/widgets/loading_shimmer.dart';
 
@@ -14,64 +14,34 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cardsAsync = ref.watch(cardsProvider);
-    final user = ref.watch(authProvider).user;
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Hello, ${user?.name ?? user?.email?.split('@').first ?? 'there'}'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.person_outline),
-            onPressed: () => _showProfileSheet(context, ref),
-          ),
-        ],
+        title: Text('My Cards', style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Divider(height: 1, color: cs.outline),
+        ),
       ),
       body: cardsAsync.when(
         loading: () => const CardListShimmer(),
         error: (e, _) => _ErrorView(onRetry: () => ref.read(cardsProvider.notifier).refresh()),
         data: (cards) => cards.isEmpty
-            ? _EmptyState(onTap: () => context.push(Routes.cardNew))
+            ? _EmptyState(onTap: () => context.push('/cards/new'))
             : _CardList(cards: cards),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.push(Routes.cardNew),
-        icon: const Icon(Icons.add),
+        onPressed: () => context.push('/cards/new'),
+        icon: const Icon(Icons.add, size: 20),
         label: const Text('New Card'),
-      ),
-    );
-  }
-
-  void _showProfileSheet(BuildContext context, WidgetRef ref) {
-    final user = ref.read(authProvider).user;
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) => Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (user?.name != null)
-              Text(user!.name!, style: Theme.of(context).textTheme.titleLarge),
-            Text(user?.email ?? '', style: Theme.of(context).textTheme.bodyMedium),
-            const SizedBox(height: 24),
-            ListTile(
-              leading: const Icon(Icons.logout),
-              title: const Text('Sign out'),
-              onTap: () async {
-                Navigator.pop(context);
-                await ref.read(authProvider).logout();
-              },
-            ),
-          ],
-        ),
+        elevation: 2,
       ),
     );
   }
 }
+
 
 class _CardList extends ConsumerWidget {
   const _CardList({required this.cards});
@@ -79,13 +49,41 @@ class _CardList extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
     return RefreshIndicator(
+      color: AppColors.primary,
       onRefresh: () => ref.read(cardsProvider.notifier).refresh(),
-      child: ListView.separated(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-        itemCount: cards.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 12),
-        itemBuilder: (context, i) => _CardTile(card: cards[i]),
+      child: CustomScrollView(
+        slivers: [
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+            sliver: SliverToBoxAdapter(
+              child: Row(
+                children: [
+                  Text('My Cards', style: tt.titleLarge),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: cs.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text('${cards.length}', style: tt.labelMedium),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+            sliver: SliverList.separated(
+              itemCount: cards.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              itemBuilder: (context, i) => _CardTile(card: cards[i]),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -97,6 +95,7 @@ class _CardTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final cs = Theme.of(context).colorScheme;
     return Dismissible(
       key: Key(card.id),
       direction: DismissDirection.endToStart,
@@ -104,7 +103,7 @@ class _CardTile extends ConsumerWidget {
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.error,
+          color: cs.error,
           borderRadius: BorderRadius.circular(16),
         ),
         child: const Icon(Icons.delete_outline, color: Colors.white),
@@ -119,7 +118,7 @@ class _CardTile extends ConsumerWidget {
               TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
               TextButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                child: Text('Delete', style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                child: Text('Delete', style: TextStyle(color: cs.error)),
               ),
             ],
           ),
@@ -147,28 +146,39 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
+        padding: const EdgeInsets.all(40),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.badge_outlined, size: 80, color: Theme.of(context).colorScheme.primary.withOpacity(0.4)),
-            const SizedBox(height: 20),
-            Text('No cards yet', style: Theme.of(context).textTheme.titleLarge),
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Icon(Icons.badge_outlined, size: 40, color: AppColors.primary.withOpacity(0.7)),
+            ),
+            const SizedBox(height: 24),
+            Text('No cards yet', style: tt.titleLarge),
             const SizedBox(height: 8),
             Text(
-              'Create your first digital business card.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                  ),
+              'Create your first digital business card and share it with the world.',
+              style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 32),
-            ElevatedButton.icon(
-              onPressed: onTap,
-              icon: const Icon(Icons.add),
-              label: const Text('Create Your First Card'),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: onTap,
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Create Your First Card'),
+              ),
             ),
           ],
         ),
@@ -183,15 +193,19 @@ class _ErrorView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.error_outline, size: 48),
-          const SizedBox(height: 12),
-          const Text('Failed to load cards.'),
+          Icon(Icons.cloud_off_outlined, size: 52, color: cs.onSurfaceVariant),
           const SizedBox(height: 16),
-          TextButton(onPressed: onRetry, child: const Text('Retry')),
+          Text('Failed to load cards', style: tt.titleMedium),
+          const SizedBox(height: 8),
+          Text('Check your connection and try again.', style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
+          const SizedBox(height: 20),
+          OutlinedButton(onPressed: onRetry, child: const Text('Retry')),
         ],
       ),
     );
