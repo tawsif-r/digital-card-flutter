@@ -3,7 +3,7 @@ class AppConstants {
 
   // Change to your machine's local IP for physical device testing.
   // Use 10.0.2.2 for Android emulator.
-  static const String baseUrl = 'http://10.0.2.2:3000';
+  static const String baseUrl = 'http://localhost:3000';
 
   static const String appName = 'Digital Card';
 }

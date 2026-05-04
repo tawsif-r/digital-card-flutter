@@ -4,7 +4,8 @@ import 'core/router/router.dart';
 import 'core/theme/app_theme.dart';
 import 'core/constants.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const ProviderScope(child: DigitalCardApp()));
 }
 

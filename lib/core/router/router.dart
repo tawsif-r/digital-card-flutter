@@ -11,21 +11,27 @@ import '../../features/cards/screens/card_detail_screen.dart';
 import '../../features/share/screens/public_card_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
-  final authNotifier = ref.watch(authProvider);
+  final authNotifier = ref.read(authProvider);
 
   return GoRouter(
     initialLocation: Routes.splash,
     refreshListenable: authNotifier,
     redirect: (context, state) {
       final isAuthenticated = authNotifier.isAuthenticated;
-      final isInitial = authNotifier.state is AuthInitial;
+      final isLoading = authNotifier.state is AuthInitial || authNotifier.state is AuthLoading;
       final path = state.matchedLocation;
 
-      // Always allow public card and splash
-      if (path.startsWith('/c/') || path == Routes.splash) return null;
+      // Always allow public card
+      if (path.startsWith('/c/')) return null;
 
-      // Still initializing — stay on splash
-      if (isInitial) return Routes.splash;
+      // Splash: stay while loading, redirect when done
+      if (path == Routes.splash) {
+        if (isLoading) return null;
+        return isAuthenticated ? Routes.home : Routes.login;
+      }
+
+      // Still loading — stay on splash
+      if (isLoading) return Routes.splash;
 
       final isAuthRoute = path == Routes.login || path == Routes.register;
 

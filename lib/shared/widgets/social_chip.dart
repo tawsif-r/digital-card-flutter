@@ -12,14 +12,20 @@ class SocialChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    if (onDelete != null) {
+      return FilterChip(
+        avatar: FaIcon(_iconFor(social.platform), size: 14),
+        label: Text(social.platform),
+        onSelected: (_) {},
+        onDeleted: onDelete,
+        backgroundColor: theme.colorScheme.surfaceContainerHighest,
+        labelStyle: theme.textTheme.labelSmall,
+      );
+    }
     return ActionChip(
       avatar: FaIcon(_iconFor(social.platform), size: 14),
       label: Text(social.platform),
-      onPressed: onDelete == null
-          ? () => launchUrl(Uri.parse(social.url), mode: LaunchMode.externalApplication)
-          : null,
-      deleteIcon: onDelete != null ? const Icon(Icons.close, size: 14) : null,
-      onDeleted: onDelete,
+      onPressed: () => launchUrl(Uri.parse(social.url), mode: LaunchMode.externalApplication),
       backgroundColor: theme.colorScheme.surfaceContainerHighest,
       labelStyle: theme.textTheme.labelSmall,
     );

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_colorpicker/flutter_colorpicker.dart';
+import 'package:flutter_colorpicker/flutter_colorpicker.dart' hide colorToHex;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../providers/card_builder_provider.dart';
@@ -59,10 +59,12 @@ class _CardBuilderScreenState extends ConsumerState<CardBuilderScreen> {
       final card = await ref.read(cardsProvider.notifier).createCard(data);
       ok = card != null;
     }
-    setState(() => _loading = false);
     if (!mounted) return;
+    setState(() => _loading = false);
     if (ok) {
-      context.pop();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) context.pop();
+      });
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Failed to save card. Please try again.')),
