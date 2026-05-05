@@ -11,6 +11,9 @@ import '../../features/cards/screens/home_screen.dart';
 import '../../features/cards/screens/card_builder_screen.dart';
 import '../../features/cards/screens/card_detail_screen.dart';
 import '../../features/share/screens/public_card_screen.dart';
+import '../../features/dashboard/screens/dashboard_screen.dart';
+import '../../features/tasks/screens/todos_screen.dart';
+import '../../features/settings/screens/settings_screen.dart';
 import '../../shared/screens/placeholder_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -53,7 +56,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             AppShell(navigationShell: navigationShell),
         branches: [
           StatefulShellBranch(routes: [
-            GoRoute(path: Routes.home, builder: (_, __) => const HomeScreen()),
+            GoRoute(path: Routes.home, builder: (_, __) => const DashboardScreen()),
           ]),
           StatefulShellBranch(routes: [
             GoRoute(
@@ -119,16 +122,10 @@ final routerProvider = Provider<GoRouter>((ref) {
             ),
           ]),
           StatefulShellBranch(routes: [
-            GoRoute(
-              path: Routes.todos,
-              builder: (_, __) => const PlaceholderScreen(title: 'Todos', icon: Icons.check_box_outlined),
-            ),
+            GoRoute(path: Routes.todos, builder: (_, __) => const TodosScreen()),
           ]),
           StatefulShellBranch(routes: [
-            GoRoute(
-              path: Routes.settings,
-              builder: (_, __) => const PlaceholderScreen(title: 'Settings', icon: Icons.settings_outlined),
-            ),
+            GoRoute(path: Routes.settings, builder: (_, __) => const SettingsScreen()),
           ]),
         ],
       ),
