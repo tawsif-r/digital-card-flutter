@@ -20,6 +20,7 @@ class Routes {
   static const String me = '/me';
   static const String meetings = '/meetings';
   static const String todos = '/todos';
+  static const String mail = '/mail';
   static const String settings = '/settings';
 
   static String cardDetailPath(String id) => '/cards/$id';

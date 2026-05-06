@@ -13,6 +13,7 @@ import '../../features/cards/screens/card_detail_screen.dart';
 import '../../features/share/screens/public_card_screen.dart';
 import '../../features/dashboard/screens/dashboard_screen.dart';
 import '../../features/settings/screens/settings_screen.dart';
+import '../../features/mail/screens/mail_screen.dart';
 import '../../shared/screens/placeholder_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -124,6 +125,12 @@ final routerProvider = Provider<GoRouter>((ref) {
             GoRoute(
               path: Routes.todos,
               builder: (_, __) => const PlaceholderScreen(title: 'Todos', icon: Icons.check_box_outlined),
+            ),
+          ]),
+          StatefulShellBranch(routes: [
+            GoRoute(
+              path: Routes.mail,
+              builder: (_, __) => const MailScreen(),
             ),
           ]),
           StatefulShellBranch(routes: [
