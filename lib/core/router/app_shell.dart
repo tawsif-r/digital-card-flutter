@@ -107,6 +107,7 @@ class _SidebarContent extends ConsumerWidget {
                 _SectionLabel('Workspace'),
                 _NavItem(label: 'My Company', icon: Icons.business_outlined, route: Routes.company, shell: navigationShell),
                 _NavItem(label: 'Communication Hub', icon: Icons.hub_outlined, route: Routes.comms, shell: navigationShell),
+                _NavItem(label: 'Mail', icon: Icons.mail_outline, route: Routes.mail, shell: navigationShell),
                 _NavItem(label: 'Others', icon: Icons.more_horiz, route: Routes.others, shell: navigationShell),
                 _SectionLabel('Network'),
                 _NavItem(label: 'Contacts', icon: Icons.contacts_outlined, route: Routes.contacts, shell: navigationShell),
