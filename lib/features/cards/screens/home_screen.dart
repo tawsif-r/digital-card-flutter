@@ -20,6 +20,17 @@ class HomeScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text('My Cards', style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: FilledButton.icon(
+              onPressed: () => context.push(Routes.cardIssue),
+              icon: const Icon(Icons.send_outlined, size: 16),
+              label: const Text('Issue Card'),
+              style: FilledButton.styleFrom(visualDensity: VisualDensity.compact),
+            ),
+          ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
           child: Divider(height: 1, color: cs.outline),
@@ -132,9 +143,25 @@ class _CardTile extends ConsumerWidget {
           );
         }
       },
-      child: GestureDetector(
-        onTap: () => context.push(Routes.cardDetailPath(card.id)),
-        child: CardWidget(data: card.data),
+      child: Column(
+        children: [
+          GestureDetector(
+            onTap: () => context.push(Routes.cardDetailPath(card.id)),
+            child: CardWidget(data: card.data),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 6, left: 2, right: 2),
+            child: SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.send_outlined, size: 14),
+                label: const Text('Issue to Employee'),
+                onPressed: () => context.push(Routes.cardIssue, extra: card.data),
+                style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -12,6 +12,7 @@ import '../../features/auth/screens/register_screen.dart';
 import '../../features/cards/screens/home_screen.dart';
 import '../../features/cards/screens/card_builder_screen.dart';
 import '../../features/cards/screens/card_detail_screen.dart';
+import '../../features/cards/domain/card_data.dart';
 import '../../features/cards/screens/issue_card_screen.dart';
 import '../../features/cards/screens/issued_cards_screen.dart';
 import '../../features/company/screens/my_company_screen.dart';
@@ -94,7 +95,10 @@ final routerProvider = Provider<GoRouter>((ref) {
               builder: (_, __) => const HomeScreen(),
               routes: [
                 GoRoute(path: 'new', builder: (_, __) => const CardBuilderScreen()),
-                GoRoute(path: 'issue', builder: (_, __) => const IssueCardScreen()),
+                GoRoute(
+                  path: 'issue',
+                  builder: (_, state) => IssueCardScreen(template: state.extra as CardData?),
+                ),
                 GoRoute(
                   path: ':id',
                   builder: (_, state) => CardDetailScreen(cardId: state.pathParameters['id']!),

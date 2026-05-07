@@ -7,7 +7,9 @@ import '../../../shared/widgets/app_text_field.dart';
 import '../../../shared/utils/validators.dart';
 
 class IssueCardScreen extends ConsumerStatefulWidget {
-  const IssueCardScreen({super.key});
+  const IssueCardScreen({super.key, this.template});
+
+  final CardData? template;
 
   @override
   ConsumerState<IssueCardScreen> createState() => _IssueCardScreenState();
@@ -23,8 +25,22 @@ class _IssueCardScreenState extends ConsumerState<IssueCardScreen> {
   final _emailCtrl = TextEditingController();
   final _websiteCtrl = TextEditingController();
   CardTemplate _template = CardTemplate.minimal;
+  String _accentColor = '#1A73E8';
   bool _loading = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    final t = widget.template;
+    if (t != null) {
+      _titleCtrl.text = t.title ?? '';
+      _companyCtrl.text = t.company ?? '';
+      _websiteCtrl.text = t.website ?? '';
+      _template = t.template;
+      _accentColor = t.accentColor;
+    }
+  }
 
   @override
   void dispose() {
@@ -52,7 +68,7 @@ class _IssueCardScreenState extends ConsumerState<IssueCardScreen> {
       email: _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
       website: _websiteCtrl.text.trim().isEmpty ? null : _websiteCtrl.text.trim(),
       template: _template,
-      accentColor: '#1A73E8',
+      accentColor: _accentColor,
     );
     final (_, err) = await ref.read(cardsProvider.notifier).issueCard(
           _recipientEmailCtrl.text.trim(),
@@ -78,6 +94,7 @@ class _IssueCardScreenState extends ConsumerState<IssueCardScreen> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final hasTemplate = widget.template != null;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Issue Card')),
@@ -91,6 +108,27 @@ class _IssueCardScreenState extends ConsumerState<IssueCardScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (hasTemplate) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: cs.primaryContainer,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.auto_awesome, size: 14, color: cs.onPrimaryContainer),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Template pre-filled — just add employee details',
+                            style: tt.labelSmall?.copyWith(color: cs.onPrimaryContainer),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
                   Text('Recipient', style: tt.titleMedium),
                   const SizedBox(height: 8),
                   AppTextField(
@@ -102,7 +140,7 @@ class _IssueCardScreenState extends ConsumerState<IssueCardScreen> {
                     validator: Validators.email,
                   ),
                   const SizedBox(height: 24),
-                  Text('Card Details', style: tt.titleMedium),
+                  Text('Employee Details', style: tt.titleMedium),
                   const SizedBox(height: 8),
                   AppTextField(
                     label: 'Full Name',
@@ -113,14 +151,14 @@ class _IssueCardScreenState extends ConsumerState<IssueCardScreen> {
                   ),
                   const SizedBox(height: 14),
                   AppTextField(
-                    label: 'Job Title (optional)',
+                    label: hasTemplate ? 'Job Title' : 'Job Title (optional)',
                     controller: _titleCtrl,
                     textInputAction: TextInputAction.next,
                     prefixIcon: const Icon(Icons.work_outline),
                   ),
                   const SizedBox(height: 14),
                   AppTextField(
-                    label: 'Company (optional)',
+                    label: hasTemplate ? 'Company' : 'Company (optional)',
                     controller: _companyCtrl,
                     textInputAction: TextInputAction.next,
                     prefixIcon: const Icon(Icons.business_outlined),
@@ -151,7 +189,15 @@ class _IssueCardScreenState extends ConsumerState<IssueCardScreen> {
                     onFieldSubmitted: (_) => _submit(),
                   ),
                   const SizedBox(height: 24),
-                  Text('Template', style: tt.titleMedium),
+                  Row(
+                    children: [
+                      Text('Template', style: tt.titleMedium),
+                      if (hasTemplate) ...[
+                        const SizedBox(width: 8),
+                        Text('(from template)', style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant)),
+                      ],
+                    ],
+                  ),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
