@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../domain/user_model.dart';
 import '../providers/auth_provider.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/theme/theme_provider.dart';
@@ -21,6 +22,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _emailCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
   bool _obscure = true;
+  UserRole _role = UserRole.employer;
 
   @override
   void dispose() {
@@ -36,6 +38,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           _emailCtrl.text.trim(),
           _passCtrl.text,
           _nameCtrl.text.trim().isEmpty ? null : _nameCtrl.text.trim(),
+          _role,
         );
   }
 
@@ -51,7 +54,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     final tt = Theme.of(context).textTheme;
 
     ref.listen<AuthNotifier>(authProvider, (_, notifier) {
-      if (notifier.state is AuthAuthenticated) context.go(Routes.home);
+      if (notifier.state is AuthAuthenticated) {
+        final user = notifier.user!;
+        context.go(user.role == UserRole.employee ? Routes.issuedCards : Routes.home);
+      }
     });
 
     return Scaffold(
@@ -91,6 +97,28 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           style: tt.bodyLarge?.copyWith(color: cs.onSurfaceVariant),
                         ),
                         const SizedBox(height: 32),
+                        Text('I am a…', style: tt.labelLarge),
+                        const SizedBox(height: 8),
+                        SegmentedButton<UserRole>(
+                          segments: const [
+                            ButtonSegment(
+                              value: UserRole.employer,
+                              label: Text('Employer / HR'),
+                              icon: Icon(Icons.business_outlined),
+                            ),
+                            ButtonSegment(
+                              value: UserRole.employee,
+                              label: Text('Employee'),
+                              icon: Icon(Icons.badge_outlined),
+                            ),
+                          ],
+                          selected: {_role},
+                          onSelectionChanged: (s) => setState(() => _role = s.first),
+                          style: ButtonStyle(
+                            visualDensity: VisualDensity.compact,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
                         AppTextField(
                           label: 'Full Name (optional)',
                           controller: _nameCtrl,

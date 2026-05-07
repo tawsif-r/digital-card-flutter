@@ -47,10 +47,10 @@ class AuthNotifier extends ChangeNotifier {
     }
   }
 
-  Future<void> register(String email, String password, String? name) async {
+  Future<void> register(String email, String password, String? name, [UserRole? role]) async {
     _emit(const AuthState.loading());
     try {
-      final user = await _repo.register(email: email, password: password, name: name);
+      final user = await _repo.register(email: email, password: password, name: name, role: role);
       _emit(AuthState.authenticated(user));
     } on Exception catch (e) {
       _emit(AuthState.error(_extractMessage(e)));

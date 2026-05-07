@@ -13,11 +13,13 @@ class AuthRepository {
     required String email,
     required String password,
     String? name,
+    UserRole? role,
   }) async {
     final res = await _dio.post('/auth/register', data: {
       'email': email,
       'password': password,
       if (name != null && name.isNotEmpty) 'name': name,
+      if (role != null) 'role': role.name,
     });
     await _saveTokens(res.data);
     return UserModel.fromJson(res.data['user'] as Map<String, dynamic>);

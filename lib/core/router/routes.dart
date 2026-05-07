@@ -23,6 +23,11 @@ class Routes {
   static const String mail = '/mail';
   static const String settings = '/settings';
 
+  static const String companyOnboard = '/company/onboard';
+  static const String cardIssue = '/cards/issue';
+  static const String issuedCards = '/issued';
+  static const String employeeSettings = '/employee/settings';
+
   static String cardDetailPath(String id) => '/cards/$id';
   static String cardEditPath(String id) => '/cards/$id/edit';
   static String publicCardPath(String slug) => '/c/$slug';

@@ -11,7 +11,7 @@ void main() {
 
     test('authenticated state holds user', () {
       final now = DateTime(2024);
-      final user = UserModel(id: '1', email: 'a@b.com', name: 'Test', createdAt: now, updatedAt: now);
+      final user = UserModel(id: '1', email: 'a@b.com', name: 'Test', role: UserRole.employer, createdAt: now, updatedAt: now);
       final state = AuthState.authenticated(user);
       expect(state, isA<AuthAuthenticated>());
       expect((state as AuthAuthenticated).user.email, 'a@b.com');

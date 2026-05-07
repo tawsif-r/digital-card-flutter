@@ -60,7 +60,6 @@ class CardsNotifier extends AsyncNotifier<List<CardModel>> {
 
   Future<bool> deleteCard(String id) async {
     final previous = state.valueOrNull ?? [];
-    // Optimistic removal
     state = AsyncData(previous.where((c) => c.id != id).toList());
     try {
       await ref.read(cardRepositoryProvider).delete(id);
@@ -70,6 +69,34 @@ class CardsNotifier extends AsyncNotifier<List<CardModel>> {
       return false;
     }
   }
+
+  Future<(CardModel?, String?)> issueCard(String email, CardData data) async {
+    try {
+      final card = await ref.read(cardRepositoryProvider).issue(
+            issuedToEmail: email,
+            data: data,
+          );
+      state = AsyncData([card, ...state.valueOrNull ?? []]);
+      return (card, null);
+    } catch (e) {
+      return (null, _extractError(e));
+    }
+  }
 }
 
 final cardsProvider = AsyncNotifierProvider<CardsNotifier, List<CardModel>>(CardsNotifier.new);
+
+class IssuedCardsNotifier extends AsyncNotifier<List<CardModel>> {
+  @override
+  Future<List<CardModel>> build() async {
+    return ref.read(cardRepositoryProvider).getIssuedToMe();
+  }
+
+  Future<void> refresh() async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() => ref.read(cardRepositoryProvider).getIssuedToMe());
+  }
+}
+
+final issuedCardsProvider =
+    AsyncNotifierProvider<IssuedCardsNotifier, List<CardModel>>(IssuedCardsNotifier.new);
