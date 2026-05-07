@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'routes.dart';
 import 'app_shell.dart';
+import 'employee_shell.dart';
+import '../../features/auth/domain/user_model.dart';
 import '../../features/auth/providers/auth_provider.dart';
 import '../../features/auth/screens/splash_screen.dart';
 import '../../features/auth/screens/login_screen.dart';
@@ -10,6 +12,11 @@ import '../../features/auth/screens/register_screen.dart';
 import '../../features/cards/screens/home_screen.dart';
 import '../../features/cards/screens/card_builder_screen.dart';
 import '../../features/cards/screens/card_detail_screen.dart';
+import '../../features/cards/domain/card_data.dart';
+import '../../features/cards/screens/issue_card_screen.dart';
+import '../../features/cards/screens/issued_cards_screen.dart';
+import '../../features/company/screens/my_company_screen.dart';
+import '../../features/company/screens/onboarding_screen.dart';
 import '../../features/share/screens/public_card_screen.dart';
 import '../../features/dashboard/screens/dashboard_screen.dart';
 import '../../features/settings/screens/settings_screen.dart';
@@ -26,12 +33,15 @@ final routerProvider = Provider<GoRouter>((ref) {
       final isAuthenticated = authNotifier.isAuthenticated;
       final isLoading = authNotifier.state is AuthInitial || authNotifier.state is AuthLoading;
       final path = state.matchedLocation;
+      final user = authNotifier.user;
+      final isEmployee = user?.role == UserRole.employee;
 
       if (path.startsWith('/c/')) return null;
 
       if (path == Routes.splash) {
         if (isLoading) return null;
-        return isAuthenticated ? Routes.home : Routes.login;
+        if (!isAuthenticated) return Routes.login;
+        return isEmployee ? Routes.issuedCards : Routes.home;
       }
 
       if (isLoading) return Routes.splash;
@@ -39,7 +49,17 @@ final routerProvider = Provider<GoRouter>((ref) {
       final isAuthRoute = path == Routes.login || path == Routes.register;
 
       if (!isAuthenticated && !isAuthRoute) return Routes.login;
-      if (isAuthenticated && isAuthRoute) return Routes.home;
+      if (isAuthenticated && isAuthRoute) {
+        return isEmployee ? Routes.issuedCards : Routes.home;
+      }
+
+      // Employee trying to reach employer-only routes → redirect to issued cards
+      if (isAuthenticated && isEmployee) {
+        final employerPrefixes = ['/home', '/cards', '/company'];
+        if (employerPrefixes.any((p) => path == p || path.startsWith('$p/'))) {
+          return Routes.issuedCards;
+        }
+      }
 
       return null;
     },
@@ -50,6 +70,17 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: Routes.publicCard,
         builder: (_, state) => PublicCardScreen(slug: state.pathParameters['slug']!),
+      ),
+      StatefulShellRoute.indexedStack(
+        builder: (_, __, shell) => EmployeeShell(navigationShell: shell),
+        branches: [
+          StatefulShellBranch(routes: [
+            GoRoute(path: Routes.issuedCards, builder: (_, __) => const IssuedCardsScreen()),
+          ]),
+          StatefulShellBranch(routes: [
+            GoRoute(path: Routes.employeeSettings, builder: (_, __) => const SettingsScreen()),
+          ]),
+        ],
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>
@@ -64,6 +95,10 @@ final routerProvider = Provider<GoRouter>((ref) {
               builder: (_, __) => const HomeScreen(),
               routes: [
                 GoRoute(path: 'new', builder: (_, __) => const CardBuilderScreen()),
+                GoRoute(
+                  path: 'issue',
+                  builder: (_, state) => IssueCardScreen(template: state.extra as CardData?),
+                ),
                 GoRoute(
                   path: ':id',
                   builder: (_, state) => CardDetailScreen(cardId: state.pathParameters['id']!),
@@ -82,7 +117,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(routes: [
             GoRoute(
               path: Routes.company,
-              builder: (_, __) => const PlaceholderScreen(title: 'My Company', icon: Icons.business_outlined),
+              builder: (_, __) => const MyCompanyScreen(),
+              routes: [
+                GoRoute(path: 'onboard', builder: (_, __) => const OnboardingScreen()),
+              ],
             ),
           ]),
           StatefulShellBranch(routes: [

@@ -8,6 +8,10 @@ class CardModel {
     required this.data,
     required this.createdAt,
     required this.updatedAt,
+    this.companyId,
+    this.issuedById,
+    this.issuedToId,
+    this.issuedToEmail,
   });
 
   final String id;
@@ -16,6 +20,12 @@ class CardModel {
   final CardData data;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final String? companyId;
+  final String? issuedById;
+  final String? issuedToId;
+  final String? issuedToEmail;
+
+  bool get isIssued => issuedById != null;
 
   factory CardModel.fromJson(Map<String, dynamic> json) => CardModel(
         id: json['id'] as String,
@@ -24,6 +34,10 @@ class CardModel {
         data: CardData.fromJson(json['data'] as Map<String, dynamic>),
         createdAt: DateTime.parse(json['created_at'] as String),
         updatedAt: DateTime.parse(json['updated_at'] as String),
+        companyId: json['company_id'] as String?,
+        issuedById: json['issued_by_id'] as String?,
+        issuedToId: json['issued_to_id'] as String?,
+        issuedToEmail: json['issued_to_email'] as String?,
       );
 
   CardModel copyWith({CardData? data, bool? isActive}) => CardModel(
@@ -33,5 +47,9 @@ class CardModel {
         data: data ?? this.data,
         createdAt: createdAt,
         updatedAt: updatedAt,
+        companyId: companyId,
+        issuedById: issuedById,
+        issuedToId: issuedToId,
+        issuedToEmail: issuedToEmail,
       );
 }

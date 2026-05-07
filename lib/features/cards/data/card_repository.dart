@@ -35,4 +35,20 @@ class CardRepository {
     final res = await _dio.get('/public/$slug');
     return CardModel.fromJson(res.data as Map<String, dynamic>);
   }
+
+  Future<CardModel> issue({
+    required String issuedToEmail,
+    required CardData data,
+  }) async {
+    final res = await _dio.post('/cards/issue', data: {
+      'issued_to_email': issuedToEmail,
+      'data': data.toJson(),
+    });
+    return CardModel.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  Future<List<CardModel>> getIssuedToMe() async {
+    final res = await _dio.get('/cards/issued-to-me');
+    return (res.data as List).map((e) => CardModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
 }

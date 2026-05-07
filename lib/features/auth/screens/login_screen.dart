@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../domain/user_model.dart';
 import '../providers/auth_provider.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/theme/theme_provider.dart';
@@ -45,7 +46,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final tt = Theme.of(context).textTheme;
 
     ref.listen<AuthNotifier>(authProvider, (_, notifier) {
-      if (notifier.state is AuthAuthenticated) context.go(Routes.home);
+      if (notifier.state is AuthAuthenticated) {
+        final user = notifier.user!;
+        context.go(user.role == UserRole.employee ? Routes.issuedCards : Routes.home);
+      }
     });
 
     return Scaffold(
