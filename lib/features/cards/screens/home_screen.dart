@@ -19,7 +19,7 @@ class HomeScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('My Cards', style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        title: Text('Cards', style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 8),
@@ -72,7 +72,7 @@ class _CardList extends ConsumerWidget {
             sliver: SliverToBoxAdapter(
               child: Row(
                 children: [
-                  Text('My Cards', style: tt.titleLarge),
+                  Text('Cards', style: tt.titleLarge),
                   const SizedBox(width: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),

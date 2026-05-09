@@ -16,7 +16,7 @@ class IssuedCardsScreen extends ConsumerWidget {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('My Cards')),
+      appBar: AppBar(title: const Text('Cards')),
       body: cardsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Error: $e')),

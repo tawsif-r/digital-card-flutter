@@ -103,7 +103,7 @@ class _SidebarContent extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(vertical: 8),
               children: [
                 _NavItem(label: 'Dashboard', icon: Icons.grid_view_rounded, route: Routes.home, shell: navigationShell),
-                _NavItem(label: 'My Cards', icon: Icons.badge_outlined, route: Routes.cards, shell: navigationShell),
+                _NavItem(label: 'Cards', icon: Icons.badge_outlined, route: Routes.cards, shell: navigationShell),
                 _SectionLabel('Workspace'),
                 _NavItem(label: 'My Company', icon: Icons.business_outlined, route: Routes.company, shell: navigationShell),
                 _NavItem(label: 'Communication Hub', icon: Icons.hub_outlined, route: Routes.comms, shell: navigationShell),
