@@ -102,7 +102,7 @@ class _SidebarContent extends ConsumerWidget {
             child: ListView(
               padding: const EdgeInsets.symmetric(vertical: 8),
               children: [
-                _NavItem(label: 'My Cards', icon: Icons.badge_outlined, route: Routes.issuedCards, shell: navigationShell),
+                _NavItem(label: 'Cards', icon: Icons.badge_outlined, route: Routes.issuedCards, shell: navigationShell),
               ],
             ),
           ),
