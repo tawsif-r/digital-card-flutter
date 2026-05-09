@@ -100,3 +100,97 @@ class IssuedCardsNotifier extends AsyncNotifier<List<CardModel>> {
 
 final issuedCardsProvider =
     AsyncNotifierProvider<IssuedCardsNotifier, List<CardModel>>(IssuedCardsNotifier.new);
+
+// ---------- Issued-by-company paginated ----------
+
+class IssuedByCompanyState {
+  const IssuedByCompanyState({
+    this.cards = const [],
+    this.total = 0,
+    this.page = 1,
+    this.isLoadingMore = false,
+  });
+
+  final List<CardModel> cards;
+  final int total;
+  final int page;
+  final bool isLoadingMore;
+
+  bool get hasMore => cards.length < total;
+
+  IssuedByCompanyState copyWith({
+    List<CardModel>? cards,
+    int? total,
+    int? page,
+    bool? isLoadingMore,
+  }) =>
+      IssuedByCompanyState(
+        cards: cards ?? this.cards,
+        total: total ?? this.total,
+        page: page ?? this.page,
+        isLoadingMore: isLoadingMore ?? this.isLoadingMore,
+      );
+}
+
+class IssuedByCompanyNotifier extends AsyncNotifier<IssuedByCompanyState> {
+  static const _limit = 20;
+
+  @override
+  Future<IssuedByCompanyState> build() => _fetchPage(1);
+
+  Future<IssuedByCompanyState> _fetchPage(int page) async {
+    final result = await ref.read(cardRepositoryProvider).getIssued(page: page, limit: _limit);
+    return IssuedByCompanyState(
+      cards: result.data,
+      total: result.total,
+      page: result.page,
+    );
+  }
+
+  Future<void> refresh() async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() => _fetchPage(1));
+  }
+
+  Future<bool> revokeIssued(String cardId) async {
+    final current = state.valueOrNull;
+    if (current == null) return false;
+    final previous = current.cards;
+    state = AsyncData(current.copyWith(
+      cards: previous.where((c) => c.id != cardId).toList(),
+      total: current.total - 1,
+    ));
+    try {
+      await ref.read(cardRepositoryProvider).revokeIssued(cardId);
+      return true;
+    } catch (_) {
+      state = AsyncData(current);
+      return false;
+    }
+  }
+
+  Future<void> loadMore() async {
+    final current = state.valueOrNull;
+    if (current == null || !current.hasMore || current.isLoadingMore) return;
+
+    state = AsyncData(current.copyWith(isLoadingMore: true));
+    try {
+      final nextPage = current.page + 1;
+      final result = await ref
+          .read(cardRepositoryProvider)
+          .getIssued(page: nextPage, limit: _limit);
+      state = AsyncData(current.copyWith(
+        cards: [...current.cards, ...result.data],
+        total: result.total,
+        page: result.page,
+        isLoadingMore: false,
+      ));
+    } catch (_) {
+      state = AsyncData(current.copyWith(isLoadingMore: false));
+    }
+  }
+}
+
+final issuedByCompanyProvider =
+    AsyncNotifierProvider<IssuedByCompanyNotifier, IssuedByCompanyState>(
+        IssuedByCompanyNotifier.new);

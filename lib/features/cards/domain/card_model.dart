@@ -12,6 +12,7 @@ class CardModel {
     this.issuedById,
     this.issuedToId,
     this.issuedToEmail,
+    this.acknowledgedAt,
   });
 
   final String id;
@@ -24,8 +25,10 @@ class CardModel {
   final String? issuedById;
   final String? issuedToId;
   final String? issuedToEmail;
+  final DateTime? acknowledgedAt;
 
   bool get isIssued => issuedById != null;
+  bool get isAcknowledged => acknowledgedAt != null;
 
   factory CardModel.fromJson(Map<String, dynamic> json) => CardModel(
         id: json['id'] as String,
@@ -38,6 +41,9 @@ class CardModel {
         issuedById: json['issued_by_id'] as String?,
         issuedToId: json['issued_to_id'] as String?,
         issuedToEmail: json['issued_to_email'] as String?,
+        acknowledgedAt: json['acknowledged_at'] != null
+            ? DateTime.parse(json['acknowledged_at'] as String)
+            : null,
       );
 
   CardModel copyWith({CardData? data, bool? isActive}) => CardModel(
@@ -51,5 +57,6 @@ class CardModel {
         issuedById: issuedById,
         issuedToId: issuedToId,
         issuedToEmail: issuedToEmail,
+        acknowledgedAt: acknowledgedAt,
       );
 }

@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import '../domain/card_model.dart';
 import '../domain/card_data.dart';
+import '../../../shared/domain/paged_result.dart';
 
 class CardRepository {
   CardRepository(this._dio);
@@ -50,5 +51,17 @@ class CardRepository {
   Future<List<CardModel>> getIssuedToMe() async {
     final res = await _dio.get('/cards/issued-to-me');
     return (res.data as List).map((e) => CardModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<PagedResult<CardModel>> getIssued({int page = 1, int limit = 20}) async {
+    final res = await _dio.get<Map<String, dynamic>>(
+      '/cards/issued',
+      queryParameters: {'page': page, 'limit': limit},
+    );
+    return PagedResult.fromJson(res.data!, CardModel.fromJson);
+  }
+
+  Future<void> revokeIssued(String cardId) async {
+    await _dio.delete('/cards/issued/$cardId');
   }
 }
