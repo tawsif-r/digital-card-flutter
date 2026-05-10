@@ -102,7 +102,15 @@ class _SidebarContent extends ConsumerWidget {
             child: ListView(
               padding: const EdgeInsets.symmetric(vertical: 8),
               children: [
-                _NavItem(label: 'Cards', icon: Icons.badge_outlined, route: Routes.issuedCards, shell: navigationShell),
+                _NavItem(label: 'Dashboard', icon: Icons.grid_view_rounded, route: Routes.employeeDashboard, shell: navigationShell),
+                _NavItem(label: 'My Cards', icon: Icons.badge_outlined, route: Routes.issuedCards, shell: navigationShell),
+                _SectionLabel('Personal'),
+                _NavItem(label: 'Me', icon: Icons.person_outline, route: Routes.employeeMe, shell: navigationShell),
+                _NavItem(label: 'Meetings', icon: Icons.calendar_today_outlined, route: Routes.employeeMeetings, shell: navigationShell),
+                _NavItem(label: 'Todos', icon: Icons.check_box_outlined, route: Routes.employeeTodos, shell: navigationShell),
+                _SectionLabel('Network'),
+                _NavItem(label: 'Contacts', icon: Icons.contacts_outlined, route: Routes.employeeContacts, shell: navigationShell),
+                _NavItem(label: 'Networking', icon: Icons.people_outline, route: Routes.employeeNetworking, shell: navigationShell),
               ],
             ),
           ),
@@ -117,6 +125,26 @@ class _SidebarContent extends ConsumerWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(this.label);
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+      child: Text(
+        label.toUpperCase(),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: cs.onSurfaceVariant,
+              letterSpacing: 0.8,
+            ),
       ),
     );
   }

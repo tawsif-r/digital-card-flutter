@@ -44,7 +44,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (path == Routes.splash) {
         if (isLoading) return null;
         if (!isAuthenticated) return Routes.login;
-        return isEmployee ? Routes.issuedCards : Routes.home;
+        return isEmployee ? Routes.employeeDashboard : Routes.home;
       }
 
       if (isLoading) return Routes.splash;
@@ -53,7 +53,7 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       if (!isAuthenticated && !isAuthRoute) return Routes.login;
       if (isAuthenticated && isAuthRoute) {
-        return isEmployee ? Routes.issuedCards : Routes.home;
+        return isEmployee ? Routes.employeeDashboard : Routes.home;
       }
 
       // Employee trying to reach employer-only routes → redirect to issued cards
@@ -78,7 +78,25 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, __, shell) => EmployeeShell(navigationShell: shell),
         branches: [
           StatefulShellBranch(routes: [
+            GoRoute(path: Routes.employeeDashboard, builder: (_, __) => const DashboardScreen(todosRoute: Routes.employeeTodos)),
+          ]),
+          StatefulShellBranch(routes: [
             GoRoute(path: Routes.issuedCards, builder: (_, __) => const IssuedCardsScreen()),
+          ]),
+          StatefulShellBranch(routes: [
+            GoRoute(path: Routes.employeeMe, builder: (_, __) => const PlaceholderScreen(title: 'Me', icon: Icons.person_outline)),
+          ]),
+          StatefulShellBranch(routes: [
+            GoRoute(path: Routes.employeeMeetings, builder: (_, __) => const PlaceholderScreen(title: 'Meetings', icon: Icons.calendar_today_outlined)),
+          ]),
+          StatefulShellBranch(routes: [
+            GoRoute(path: Routes.employeeTodos, builder: (_, __) => const PlaceholderScreen(title: 'Todos', icon: Icons.check_box_outlined)),
+          ]),
+          StatefulShellBranch(routes: [
+            GoRoute(path: Routes.employeeContacts, builder: (_, __) => const PlaceholderScreen(title: 'Contacts', icon: Icons.contacts_outlined)),
+          ]),
+          StatefulShellBranch(routes: [
+            GoRoute(path: Routes.employeeNetworking, builder: (_, __) => const PlaceholderScreen(title: 'Networking', icon: Icons.people_outline)),
           ]),
           StatefulShellBranch(routes: [
             GoRoute(path: Routes.employeeSettings, builder: (_, __) => const SettingsScreen()),
