@@ -8,7 +8,9 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/router/routes.dart';
 
 class DashboardScreen extends ConsumerWidget {
-  const DashboardScreen({super.key});
+  const DashboardScreen({super.key, this.todosRoute});
+
+  final String? todosRoute;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -32,7 +34,7 @@ class DashboardScreen extends ConsumerWidget {
           error: (_, __) => _ErrorView(
             onRetry: () => ref.read(dashboardProvider.notifier).refresh(),
           ),
-          data: (data) => _DashboardBody(state: data),
+          data: (data) => _DashboardBody(state: data, todosRoute: todosRoute ?? Routes.todos),
         ),
       ),
     );
@@ -40,9 +42,10 @@ class DashboardScreen extends ConsumerWidget {
 }
 
 class _DashboardBody extends ConsumerWidget {
-  const _DashboardBody({required this.state});
+  const _DashboardBody({required this.state, required this.todosRoute});
 
   final DashboardState state;
+  final String todosRoute;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -70,7 +73,7 @@ class _DashboardBody extends ConsumerWidget {
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
           sliver: SliverToBoxAdapter(
-            child: _TasksOverviewCard(pendingCount: state.pendingTaskCount),
+            child: _TasksOverviewCard(pendingCount: state.pendingTaskCount, todosRoute: todosRoute),
           ),
         ),
         SliverPadding(
@@ -237,9 +240,10 @@ class _StatCard extends StatelessWidget {
 }
 
 class _TasksOverviewCard extends StatelessWidget {
-  const _TasksOverviewCard({required this.pendingCount});
+  const _TasksOverviewCard({required this.pendingCount, required this.todosRoute});
 
   final int pendingCount;
+  final String todosRoute;
 
   @override
   Widget build(BuildContext context) {
@@ -286,7 +290,7 @@ class _TasksOverviewCard extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           OutlinedButton(
-            onPressed: () => context.go(Routes.todos),
+            onPressed: () => context.go(todosRoute),
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.primary,
               side: const BorderSide(color: AppColors.primary),

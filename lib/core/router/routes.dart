@@ -28,7 +28,13 @@ class Routes {
   static const String companyOnboard = '/company/onboard';
   static const String cardIssue = '/cards/issue';
   static const String issuedCards = '/issued';
+  static const String employeeDashboard = '/employee/dashboard';
   static const String employeeSettings = '/employee/settings';
+  static const String employeeMe = '/employee/me';
+  static const String employeeMeetings = '/employee/meetings';
+  static const String employeeTodos = '/employee/todos';
+  static const String employeeContacts = '/employee/contacts';
+  static const String employeeNetworking = '/employee/networking';
 
   static String cardDetailPath(String id) => '/cards/$id';
   static String cardEditPath(String id) => '/cards/$id/edit';
