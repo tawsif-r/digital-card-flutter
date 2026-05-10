@@ -16,6 +16,8 @@ class Routes {
   static const String comms = '/comms';
   static const String others = '/others';
   static const String contacts = '/contacts';
+  static const String contactAdd = '/contacts/add';
+  static const String contactDetail = '/contacts/detail/:id';
   static const String networking = '/networking';
   static const String me = '/me';
   static const String meetings = '/meetings';
@@ -31,4 +33,5 @@ class Routes {
   static String cardDetailPath(String id) => '/cards/$id';
   static String cardEditPath(String id) => '/cards/$id/edit';
   static String publicCardPath(String slug) => '/c/$slug';
+  static String contactDetailPath(String id) => '/contacts/detail/$id';
 }

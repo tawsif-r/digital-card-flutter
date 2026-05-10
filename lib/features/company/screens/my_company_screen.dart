@@ -73,7 +73,10 @@ class _CompanyViewState extends ConsumerState<_CompanyView> {
     return Scaffold(
       appBar: AppBar(title: const Text('My Company')),
       body: RefreshIndicator(
-        onRefresh: () => ref.read(issuedByCompanyProvider.notifier).refresh(),
+        onRefresh: () => Future.wait([
+          ref.read(companyProvider.notifier).refresh(),
+          ref.read(issuedByCompanyProvider.notifier).refresh(),
+        ]),
         child: ListView(
           controller: _scrollController,
           padding: const EdgeInsets.all(24),
