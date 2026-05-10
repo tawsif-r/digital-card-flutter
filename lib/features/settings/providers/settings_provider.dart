@@ -60,6 +60,21 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
     }
   }
 
+  Future<(bool, String?)> updatePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    try {
+      await ref.read(settingsRepositoryProvider).updatePassword(
+            currentPassword: currentPassword,
+            newPassword: newPassword,
+          );
+      return (true, null);
+    } catch (e) {
+      return (false, 'Failed to update password. Check current password and try again.');
+    }
+  }
+
   Future<(bool, String?)> updateSettings(UserSettings settings) async {
     final previous = state.valueOrNull;
     if (previous != null) {

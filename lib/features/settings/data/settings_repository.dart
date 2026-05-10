@@ -1,7 +1,6 @@
 import 'package:dio/dio.dart';
 import '../domain/user_profile.dart';
 import '../domain/user_settings.dart';
-import '../../../core/services/app_config.dart';
 import '../../../core/services/mock_service.dart';
 
 class SettingsRepository {
@@ -10,26 +9,46 @@ class SettingsRepository {
   final Dio _dio;
 
   Future<UserProfile> getProfile() async {
-    if (AppConfig.useMock) return MockService.getUserProfile();
-    final res = await _dio.get('/api/user/profile');
-    return UserProfile.fromJson(res.data['data'] as Map<String, dynamic>);
+    final res = await _dio.get('/users/me');
+    final data = res.data as Map<String, dynamic>;
+    return UserProfile(
+      id: data['id'] as String,
+      email: data['email'] as String,
+      fullName: data['name'] as String?,
+    );
   }
 
   Future<UserProfile> updateProfile(UserProfile profile) async {
-    if (AppConfig.useMock) return MockService.updateUserProfile(profile);
-    final res = await _dio.put('/api/user/profile', data: profile.toJson());
-    return UserProfile.fromJson(res.data['data'] as Map<String, dynamic>);
+    final res = await _dio.patch('/users/me', data: {
+      if (profile.fullName != null && profile.fullName!.isNotEmpty)
+        'name': profile.fullName,
+      'email': profile.email,
+    });
+    final data = res.data as Map<String, dynamic>;
+    return UserProfile(
+      id: data['id'] as String,
+      email: data['email'] as String,
+      fullName: data['name'] as String?,
+    );
+  }
+
+  Future<void> updatePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    await _dio.patch('/users/me', data: {
+      'current_password': currentPassword,
+      'new_password': newPassword,
+    });
   }
 
   Future<UserSettings> getSettings() async {
-    if (AppConfig.useMock) return MockService.getUserSettings();
-    final res = await _dio.get('/api/user/settings');
-    return UserSettings.fromJson(res.data['data'] as Map<String, dynamic>);
+    // TODO: wire to real endpoint when backend ready
+    return MockService.getUserSettings();
   }
 
   Future<UserSettings> updateSettings(UserSettings settings) async {
-    if (AppConfig.useMock) return MockService.updateUserSettings(settings);
-    final res = await _dio.put('/api/user/settings', data: settings.toJson());
-    return UserSettings.fromJson(res.data['data'] as Map<String, dynamic>);
+    // TODO: wire to real endpoint when backend ready
+    return MockService.updateUserSettings(settings);
   }
 }

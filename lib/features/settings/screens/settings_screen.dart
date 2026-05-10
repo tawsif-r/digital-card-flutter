@@ -5,6 +5,8 @@ import '../domain/user_profile.dart';
 import '../domain/user_settings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/utils/validators.dart';
+import '../../../features/auth/providers/auth_provider.dart';
+import '../../../features/auth/domain/user_model.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -12,6 +14,7 @@ class SettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settingsAsync = ref.watch(settingsProvider);
+    final role = ref.watch(authProvider).user?.role;
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
@@ -31,6 +34,7 @@ class SettingsScreen extends ConsumerWidget {
         data: (state) => _SettingsBody(
           profile: state.profile,
           settings: state.settings,
+          role: role,
         ),
       ),
     );
@@ -38,10 +42,15 @@ class SettingsScreen extends ConsumerWidget {
 }
 
 class _SettingsBody extends StatefulWidget {
-  const _SettingsBody({required this.profile, required this.settings});
+  const _SettingsBody({
+    required this.profile,
+    required this.settings,
+    this.role,
+  });
 
   final UserProfile profile;
   final UserSettings settings;
+  final UserRole? role;
 
   @override
   State<_SettingsBody> createState() => _SettingsBodyState();
@@ -49,40 +58,55 @@ class _SettingsBody extends StatefulWidget {
 
 class _SettingsBodyState extends State<_SettingsBody> {
   final _formKey = GlobalKey<FormState>();
+  final _passwordFormKey = GlobalKey<FormState>();
+
   late final TextEditingController _fullName;
-  late final TextEditingController _phone;
-  late final TextEditingController _designation;
-  late final TextEditingController _department;
-  late final TextEditingController _company;
+  late final TextEditingController _email;
+
+  final TextEditingController _currentPassword = TextEditingController();
+  final TextEditingController _newPassword = TextEditingController();
+  final TextEditingController _confirmPassword = TextEditingController();
+
+  bool _showCurrentPw = false;
+  bool _showNewPw = false;
+  bool _showConfirmPw = false;
 
   late bool _showOnlineStatus;
   late bool _allowAudioCalls;
   late bool _allowVideoCalls;
 
   bool _savingProfile = false;
+  bool _savingPassword = false;
   bool _savingSettings = false;
 
   @override
   void initState() {
     super.initState();
     _fullName = TextEditingController(text: widget.profile.fullName ?? '');
-    _phone = TextEditingController(text: widget.profile.phone ?? '');
-    _designation = TextEditingController(text: widget.profile.designation ?? '');
-    _department = TextEditingController(text: widget.profile.department ?? '');
-    _company = TextEditingController(text: widget.profile.company ?? '');
-
+    _email = TextEditingController(text: widget.profile.email);
     _showOnlineStatus = widget.settings.showOnlineStatus;
     _allowAudioCalls = widget.settings.allowAudioCalls;
     _allowVideoCalls = widget.settings.allowVideoCalls;
   }
 
   @override
+  void didUpdateWidget(_SettingsBody old) {
+    super.didUpdateWidget(old);
+    if (old.profile.fullName != widget.profile.fullName) {
+      _fullName.text = widget.profile.fullName ?? '';
+    }
+    if (old.profile.email != widget.profile.email) {
+      _email.text = widget.profile.email;
+    }
+  }
+
+  @override
   void dispose() {
     _fullName.dispose();
-    _phone.dispose();
-    _designation.dispose();
-    _department.dispose();
-    _company.dispose();
+    _email.dispose();
+    _currentPassword.dispose();
+    _newPassword.dispose();
+    _confirmPassword.dispose();
     super.dispose();
   }
 
@@ -91,105 +115,158 @@ class _SettingsBodyState extends State<_SettingsBody> {
     return Consumer(
       builder: (context, ref, _) => SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(20, 24, 20, 100),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _SectionLabel(
-                icon: Icons.person_outline,
-                title: 'Profile Information',
-                subtitle: 'Update your personal and professional details.',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _ProfileCard(profile: widget.profile, role: widget.role),
+            const SizedBox(height: 24),
+            const Divider(),
+            const SizedBox(height: 24),
+            Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _SectionLabel(
+                    icon: Icons.person_outline,
+                    title: 'Profile Information',
+                    subtitle: 'Update your name and email.',
+                  ),
+                  const SizedBox(height: 16),
+                  _ProfileField(
+                    label: 'Full Name',
+                    controller: _fullName,
+                    hint: 'Tawsif Hasan',
+                    validator: Validators.required,
+                  ),
+                  const SizedBox(height: 12),
+                  _ProfileField(
+                    label: 'Email',
+                    controller: _email,
+                    hint: 'new@example.com',
+                    keyboardType: TextInputType.emailAddress,
+                    validator: Validators.email,
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _savingProfile ? null : () => _saveProfile(ref),
+                      child: _savingProfile
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Text('Save Profile'),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 16),
-              _ProfileField(
-                label: 'Full Name',
-                controller: _fullName,
-                hint: 'John Doe',
-                validator: Validators.required,
+            ),
+            const SizedBox(height: 32),
+            const Divider(),
+            const SizedBox(height: 24),
+            Form(
+              key: _passwordFormKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _SectionLabel(
+                    icon: Icons.lock_outline,
+                    title: 'Change Password',
+                    subtitle: 'Enter your current password to set a new one.',
+                  ),
+                  const SizedBox(height: 16),
+                  _PasswordField(
+                    label: 'Current Password',
+                    controller: _currentPassword,
+                    hint: '••••••••',
+                    obscure: !_showCurrentPw,
+                    onToggle: () => setState(() => _showCurrentPw = !_showCurrentPw),
+                    validator: Validators.required,
+                  ),
+                  const SizedBox(height: 12),
+                  _PasswordField(
+                    label: 'New Password',
+                    controller: _newPassword,
+                    hint: '••••••••',
+                    obscure: !_showNewPw,
+                    onToggle: () => setState(() => _showNewPw = !_showNewPw),
+                    validator: Validators.password,
+                  ),
+                  const SizedBox(height: 12),
+                  _PasswordField(
+                    label: 'Confirm New Password',
+                    controller: _confirmPassword,
+                    hint: '••••••••',
+                    obscure: !_showConfirmPw,
+                    onToggle: () => setState(() => _showConfirmPw = !_showConfirmPw),
+                    validator: (v) {
+                      if (v == null || v.isEmpty) return 'Required';
+                      if (v != _newPassword.text) return 'Passwords do not match';
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _savingPassword ? null : () => _savePassword(ref),
+                      child: _savingPassword
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Text('Update Password'),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 12),
-              _ProfileField(
-                label: 'Phone',
-                controller: _phone,
-                hint: '+880 1234-567890',
-                keyboardType: TextInputType.phone,
+            ),
+            const SizedBox(height: 32),
+            const Divider(),
+            const SizedBox(height: 24),
+            _SectionLabel(
+              icon: Icons.shield_outlined,
+              title: 'Privacy & Communication',
+              subtitle: 'Control who can contact you and see your status.',
+            ),
+            const SizedBox(height: 16),
+            _ToggleTile(
+              title: 'Show online status',
+              subtitle: "Let your connections see when you're active.",
+              value: _showOnlineStatus,
+              onChanged: (v) => setState(() => _showOnlineStatus = v),
+            ),
+            _ToggleTile(
+              title: 'Allow audio calls',
+              subtitle: 'Connections can call you via audio.',
+              value: _allowAudioCalls,
+              onChanged: (v) => setState(() => _allowAudioCalls = v),
+            ),
+            _ToggleTile(
+              title: 'Allow video calls',
+              subtitle: 'Connections can call you via video.',
+              value: _allowVideoCalls,
+              onChanged: (v) => setState(() => _allowVideoCalls = v),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _savingSettings ? null : () => _saveSettings(ref),
+                child: _savingSettings
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Text('Save Privacy Settings'),
               ),
-              const SizedBox(height: 12),
-              _ProfileField(
-                label: 'Designation',
-                controller: _designation,
-                hint: 'Software Engineer',
-              ),
-              const SizedBox(height: 12),
-              _ProfileField(
-                label: 'Department',
-                controller: _department,
-                hint: 'Engineering',
-              ),
-              const SizedBox(height: 12),
-              _ProfileField(
-                label: 'Company',
-                controller: _company,
-                hint: 'DigitalCard Inc',
-              ),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _savingProfile ? null : () => _saveProfile(ref),
-                  child: _savingProfile
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                        )
-                      : const Text('Save Profile'),
-                ),
-              ),
-              const SizedBox(height: 32),
-              const Divider(),
-              const SizedBox(height: 24),
-              _SectionLabel(
-                icon: Icons.shield_outlined,
-                title: 'Privacy & Communication',
-                subtitle: 'Control who can contact you and see your status.',
-              ),
-              const SizedBox(height: 16),
-              _ToggleTile(
-                title: 'Show online status',
-                subtitle: 'Let your connections see when you\'re active.',
-                value: _showOnlineStatus,
-                onChanged: (v) => setState(() => _showOnlineStatus = v),
-              ),
-              _ToggleTile(
-                title: 'Allow audio calls',
-                subtitle: 'Connections can call you via audio.',
-                value: _allowAudioCalls,
-                onChanged: (v) => setState(() => _allowAudioCalls = v),
-              ),
-              _ToggleTile(
-                title: 'Allow video calls',
-                subtitle: 'Connections can call you via video.',
-                value: _allowVideoCalls,
-                onChanged: (v) => setState(() => _allowVideoCalls = v),
-              ),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _savingSettings ? null : () => _saveSettings(ref),
-                  child: _savingSettings
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                        )
-                      : const Text('Save Privacy Settings'),
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -200,11 +277,8 @@ class _SettingsBodyState extends State<_SettingsBody> {
     setState(() => _savingProfile = true);
 
     final updated = widget.profile.copyWith(
+      email: _email.text.trim(),
       fullName: _fullName.text.trim(),
-      phone: _phone.text.trim(),
-      designation: _designation.text.trim(),
-      department: _department.text.trim(),
-      company: _company.text.trim(),
     );
 
     final (ok, err) = await ref.read(settingsProvider.notifier).updateProfile(updated);
@@ -215,6 +289,33 @@ class _SettingsBodyState extends State<_SettingsBody> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(ok ? 'Profile saved.' : (err ?? 'Failed to save profile.')),
+        backgroundColor: ok ? AppColors.success : AppColors.error,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<void> _savePassword(WidgetRef ref) async {
+    if (!_passwordFormKey.currentState!.validate()) return;
+    setState(() => _savingPassword = true);
+
+    final (ok, err) = await ref.read(settingsProvider.notifier).updatePassword(
+          currentPassword: _currentPassword.text,
+          newPassword: _newPassword.text,
+        );
+
+    if (!mounted) return;
+    setState(() => _savingPassword = false);
+
+    if (ok) {
+      _currentPassword.clear();
+      _newPassword.clear();
+      _confirmPassword.clear();
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(ok ? 'Password updated.' : (err ?? 'Failed to update password.')),
         backgroundColor: ok ? AppColors.success : AppColors.error,
         behavior: SnackBarBehavior.floating,
       ),
@@ -245,6 +346,93 @@ class _SettingsBodyState extends State<_SettingsBody> {
   }
 }
 
+class _ProfileCard extends StatelessWidget {
+  const _ProfileCard({required this.profile, this.role});
+
+  final UserProfile profile;
+  final UserRole? role;
+
+  String _initials(String s) {
+    final parts = s.trim().split(' ');
+    if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    return s.isNotEmpty ? s[0].toUpperCase() : '?';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final display = profile.fullName ?? profile.email;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.15)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: Text(
+                _initials(display),
+                style: TextStyle(
+                  color: AppColors.primary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (profile.fullName != null)
+                  Text(
+                    profile.fullName!,
+                    style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                Text(
+                  profile.email,
+                  style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (role != null) ...[
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      role == UserRole.employee ? 'Employee' : 'Employer',
+                      style: tt.labelSmall?.copyWith(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _SectionLabel extends StatelessWidget {
   const _SectionLabel({
     required this.icon,
@@ -268,7 +456,7 @@ class _SectionLabel extends StatelessWidget {
           width: 38,
           height: 38,
           decoration: BoxDecoration(
-            color: AppColors.primary.withOpacity(0.12),
+            color: AppColors.primary.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(icon, size: 20, color: AppColors.primary),
@@ -321,8 +509,77 @@ class _ProfileField extends StatelessWidget {
           style: tt.bodyMedium,
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant.withOpacity(0.5)),
+            hintStyle: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: cs.outline),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: cs.outline),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: cs.error),
+            ),
+            filled: true,
+            fillColor: cs.surface,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PasswordField extends StatelessWidget {
+  const _PasswordField({
+    required this.label,
+    required this.controller,
+    required this.hint,
+    required this.obscure,
+    required this.onToggle,
+    this.validator,
+  });
+
+  final String label;
+  final TextEditingController controller;
+  final String hint;
+  final bool obscure;
+  final VoidCallback onToggle;
+  final String? Function(String?)? validator;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: tt.labelMedium?.copyWith(fontWeight: FontWeight.w500)),
+        const SizedBox(height: 6),
+        TextFormField(
+          controller: controller,
+          obscureText: obscure,
+          validator: validator,
+          style: tt.bodyMedium,
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            suffixIcon: IconButton(
+              icon: Icon(
+                obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                size: 18,
+              ),
+              onPressed: onToggle,
+              color: cs.onSurfaceVariant,
+            ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
               borderSide: BorderSide(color: cs.outline),
@@ -375,10 +632,7 @@ class _ToggleTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(title, style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w500)),
-                Text(
-                  subtitle,
-                  style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                ),
+                Text(subtitle, style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
               ],
             ),
           ),
@@ -433,11 +687,13 @@ class _SettingsShimmer extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          _shimmerBox(double.infinity, 80, cs),
+          const SizedBox(height: 24),
           _shimmerBox(180, 22, cs),
           const SizedBox(height: 8),
           _shimmerBox(260, 14, cs),
           const SizedBox(height: 20),
-          ...List.generate(5, (_) => Padding(
+          ...List.generate(2, (_) => Padding(
             padding: const EdgeInsets.only(bottom: 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -459,7 +715,7 @@ class _SettingsShimmer extends StatelessWidget {
         height: h,
         margin: const EdgeInsets.only(bottom: 2),
         decoration: BoxDecoration(
-          color: cs.surfaceContainerHighest.withOpacity(0.5),
+          color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
           borderRadius: BorderRadius.circular(8),
         ),
       );
