@@ -170,6 +170,7 @@ class _ContactDetailViewState extends ConsumerState<_ContactDetailView> {
     if (err != null) {
       messenger.showSnackBar(SnackBar(content: Text(err)));
     } else {
+      ref.invalidate(contactDetailProvider(_contact.id));
       setState(() => _contact = _contact.copyWith(notes: notes));
     }
   }

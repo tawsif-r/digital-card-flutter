@@ -3,6 +3,7 @@ import '../data/settings_repository.dart';
 import '../domain/user_profile.dart';
 import '../domain/user_settings.dart';
 import '../../../core/di/providers.dart';
+import '../../../core/providers/session_provider.dart';
 
 class SettingsState {
   const SettingsState({
@@ -26,7 +27,11 @@ final settingsRepositoryProvider = Provider<SettingsRepository>((ref) {
 
 class SettingsNotifier extends AsyncNotifier<SettingsState> {
   @override
-  Future<SettingsState> build() => _fetch();
+  Future<SettingsState> build() async {
+    final userId = ref.watch(userSessionProvider);
+    if (userId == null) throw StateError('Not authenticated');
+    return _fetch();
+  }
 
   Future<SettingsState> _fetch() async {
     final repo = ref.read(settingsRepositoryProvider);

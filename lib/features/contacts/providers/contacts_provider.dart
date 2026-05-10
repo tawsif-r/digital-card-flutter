@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/contact_repository.dart';
 import '../domain/contact_model.dart';
 import '../../../core/di/providers.dart';
+import '../../../core/providers/session_provider.dart';
 
 final contactRepositoryProvider = Provider<ContactRepository>((ref) {
   return ContactRepository(ref.watch(dioProvider));
@@ -52,7 +53,11 @@ class ContactsNotifier extends AsyncNotifier<ContactsState> {
   static const _limit = 20;
 
   @override
-  Future<ContactsState> build() => _fetchPage(1);
+  Future<ContactsState> build() async {
+    final userId = ref.watch(userSessionProvider);
+    if (userId == null) return const ContactsState();
+    return _fetchPage(1);
+  }
 
   Future<ContactsState> _fetchPage(
     int page, {
@@ -131,6 +136,8 @@ class ContactsNotifier extends AsyncNotifier<ContactsState> {
           contacts: [contact, ...current.contacts],
           total: current.total + 1,
         ));
+      } else {
+        await refresh();
       }
       return (contact, null);
     } catch (e) {
@@ -147,6 +154,8 @@ class ContactsNotifier extends AsyncNotifier<ContactsState> {
           contacts: [contact, ...current.contacts],
           total: current.total + 1,
         ));
+      } else {
+        await refresh();
       }
       return (contact, null);
     } catch (e) {
@@ -159,14 +168,14 @@ class ContactsNotifier extends AsyncNotifier<ContactsState> {
   ) async {
     try {
       final result = await ref.read(contactRepositoryProvider).importFromPhone(contacts);
-      if (result.matched.isNotEmpty) {
-        final current = state.valueOrNull;
-        if (current != null) {
-          state = AsyncData(current.copyWith(
-            contacts: [...result.matched, ...current.contacts],
-            total: current.total + result.matched.length,
-          ));
-        }
+      final current = state.valueOrNull;
+      if (result.matched.isNotEmpty && current != null) {
+        state = AsyncData(current.copyWith(
+          contacts: [...result.matched, ...current.contacts],
+          total: current.total + result.matched.length,
+        ));
+      } else if (result.matched.isNotEmpty) {
+        await refresh();
       }
       return (result, null);
     } catch (e) {
@@ -241,5 +250,7 @@ final contactsProvider =
 
 final contactDetailProvider =
     FutureProvider.family<ContactModel, String>((ref, id) async {
+  final userId = ref.watch(userSessionProvider);
+  if (userId == null) throw StateError('Not authenticated');
   return ref.read(contactRepositoryProvider).getOne(id);
 });

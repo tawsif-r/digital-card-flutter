@@ -4,6 +4,7 @@ import '../data/card_repository.dart';
 import '../domain/card_model.dart';
 import '../domain/card_data.dart';
 import '../../../core/di/providers.dart';
+import '../../../core/providers/session_provider.dart';
 
 final cardRepositoryProvider = Provider<CardRepository>((ref) {
   return CardRepository(ref.watch(dioProvider));
@@ -12,6 +13,8 @@ final cardRepositoryProvider = Provider<CardRepository>((ref) {
 class CardsNotifier extends AsyncNotifier<List<CardModel>> {
   @override
   Future<List<CardModel>> build() async {
+    final userId = ref.watch(userSessionProvider);
+    if (userId == null) return const [];
     return ref.read(cardRepositoryProvider).getAll();
   }
 
@@ -77,6 +80,7 @@ class CardsNotifier extends AsyncNotifier<List<CardModel>> {
             data: data,
           );
       state = AsyncData([card, ...state.valueOrNull ?? []]);
+      ref.read(issuedByCompanyProvider.notifier).refresh();
       return (card, null);
     } catch (e) {
       return (null, _extractError(e));
@@ -89,6 +93,8 @@ final cardsProvider = AsyncNotifierProvider<CardsNotifier, List<CardModel>>(Card
 class IssuedCardsNotifier extends AsyncNotifier<List<CardModel>> {
   @override
   Future<List<CardModel>> build() async {
+    final userId = ref.watch(userSessionProvider);
+    if (userId == null) return const [];
     return ref.read(cardRepositoryProvider).getIssuedToMe();
   }
 
@@ -136,7 +142,11 @@ class IssuedByCompanyNotifier extends AsyncNotifier<IssuedByCompanyState> {
   static const _limit = 20;
 
   @override
-  Future<IssuedByCompanyState> build() => _fetchPage(1);
+  Future<IssuedByCompanyState> build() async {
+    final userId = ref.watch(userSessionProvider);
+    if (userId == null) return const IssuedByCompanyState();
+    return _fetchPage(1);
+  }
 
   Future<IssuedByCompanyState> _fetchPage(int page) async {
     final result = await ref.read(cardRepositoryProvider).getIssued(page: page, limit: _limit);

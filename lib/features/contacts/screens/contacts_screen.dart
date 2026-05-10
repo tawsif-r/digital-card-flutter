@@ -73,17 +73,37 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
             onChanged: (s) => ref.read(contactsProvider.notifier).setSourceFilter(s),
           ),
           Expanded(
-            child: contactsAsync.when(
-              loading: () => const CardListShimmer(),
-              error: (e, _) => _ErrorView(
-                onRetry: () => ref.read(contactsProvider.notifier).refresh(),
-              ),
-              data: (state) => state.contacts.isEmpty
-                  ? _EmptyState(onAdd: () => context.push(Routes.contactAdd))
-                  : _ContactList(
-                      state: state,
-                      scrollController: _scrollController,
+            child: RefreshIndicator(
+              color: AppColors.primary,
+              onRefresh: () => ref.read(contactsProvider.notifier).refresh(),
+              child: contactsAsync.when(
+                loading: () => const CardListShimmer(),
+                error: (e, _) => LayoutBuilder(
+                  builder: (_, constraints) => SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    child: SizedBox(
+                      height: constraints.maxHeight,
+                      child: _ErrorView(
+                        onRetry: () => ref.read(contactsProvider.notifier).refresh(),
+                      ),
                     ),
+                  ),
+                ),
+                data: (state) => state.contacts.isEmpty
+                    ? LayoutBuilder(
+                        builder: (_, constraints) => SingleChildScrollView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          child: SizedBox(
+                            height: constraints.maxHeight,
+                            child: _EmptyState(onAdd: () => context.push(Routes.contactAdd)),
+                          ),
+                        ),
+                      )
+                    : _ContactList(
+                        state: state,
+                        scrollController: _scrollController,
+                      ),
+              ),
             ),
           ),
         ],
@@ -183,26 +203,23 @@ class _ContactList extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return RefreshIndicator(
-      color: AppColors.primary,
-      onRefresh: () => ref.read(contactsProvider.notifier).refresh(),
-      child: ListView.separated(
-        controller: scrollController,
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
-        itemCount: state.contacts.length + (state.isLoadingMore ? 1 : 0),
-        separatorBuilder: (_, __) => const SizedBox(height: 8),
-        itemBuilder: (context, i) {
-          if (i == state.contacts.length) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: CircularProgressIndicator(),
-              ),
-            );
-          }
-          return _ContactTile(contact: state.contacts[i]);
-        },
-      ),
+    return ListView.separated(
+      controller: scrollController,
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+      itemCount: state.contacts.length + (state.isLoadingMore ? 1 : 0),
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      itemBuilder: (context, i) {
+        if (i == state.contacts.length) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
+        return _ContactTile(contact: state.contacts[i]);
+      },
     );
   }
 }

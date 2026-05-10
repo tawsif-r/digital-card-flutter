@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/company_repository.dart';
 import '../domain/company_model.dart';
 import '../../../core/di/providers.dart';
+import '../../../core/providers/session_provider.dart';
 
 final companyRepositoryProvider = Provider<CompanyRepository>((ref) {
   return CompanyRepository(ref.watch(dioProvider));
@@ -11,7 +12,14 @@ final companyRepositoryProvider = Provider<CompanyRepository>((ref) {
 class CompanyNotifier extends AsyncNotifier<CompanyModel?> {
   @override
   Future<CompanyModel?> build() async {
+    final userId = ref.watch(userSessionProvider);
+    if (userId == null) return null;
     return ref.read(companyRepositoryProvider).getMe();
+  }
+
+  Future<void> refresh() async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() => ref.read(companyRepositoryProvider).getMe());
   }
 
   Future<String?> onboard({
