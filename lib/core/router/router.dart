@@ -24,6 +24,8 @@ import '../../features/mail/screens/mail_screen.dart';
 import '../../features/contacts/screens/contacts_screen.dart';
 import '../../features/contacts/screens/contact_detail_screen.dart';
 import '../../features/contacts/screens/add_contact_screen.dart';
+import '../../features/messaging/screens/threads_screen.dart';
+import '../../features/messaging/screens/thread_detail_screen.dart';
 import '../../shared/screens/placeholder_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -93,10 +95,39 @@ final routerProvider = Provider<GoRouter>((ref) {
             GoRoute(path: Routes.employeeTodos, builder: (_, __) => const PlaceholderScreen(title: 'Todos', icon: Icons.check_box_outlined)),
           ]),
           StatefulShellBranch(routes: [
-            GoRoute(path: Routes.employeeContacts, builder: (_, __) => const PlaceholderScreen(title: 'Contacts', icon: Icons.contacts_outlined)),
+            GoRoute(
+              path: Routes.employeeContacts,
+              builder: (_, __) => const ContactsScreen(),
+              routes: [
+                GoRoute(
+                  path: 'add',
+                  builder: (_, __) => const AddContactScreen(),
+                ),
+                GoRoute(
+                  path: 'detail/:id',
+                  builder: (_, state) => ContactDetailScreen(
+                    contactId: state.pathParameters['id']!,
+                  ),
+                ),
+              ],
+            ),
           ]),
           StatefulShellBranch(routes: [
             GoRoute(path: Routes.employeeNetworking, builder: (_, __) => const PlaceholderScreen(title: 'Networking', icon: Icons.people_outline)),
+          ]),
+          StatefulShellBranch(routes: [
+            GoRoute(
+              path: Routes.employeeThreads,
+              builder: (_, __) => const ThreadsScreen(),
+              routes: [
+                GoRoute(
+                  path: ':threadId',
+                  builder: (_, state) => ThreadDetailScreen(
+                    threadId: state.pathParameters['threadId']!,
+                  ),
+                ),
+              ],
+            ),
           ]),
           StatefulShellBranch(routes: [
             GoRoute(path: Routes.employeeSettings, builder: (_, __) => const SettingsScreen()),
@@ -147,7 +178,15 @@ final routerProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(routes: [
             GoRoute(
               path: Routes.comms,
-              builder: (_, __) => const PlaceholderScreen(title: 'Communication Hub', icon: Icons.hub_outlined),
+              builder: (_, __) => const ThreadsScreen(),
+              routes: [
+                GoRoute(
+                  path: ':threadId',
+                  builder: (_, state) => ThreadDetailScreen(
+                    threadId: state.pathParameters['threadId']!,
+                  ),
+                ),
+              ],
             ),
           ]),
           StatefulShellBranch(routes: [

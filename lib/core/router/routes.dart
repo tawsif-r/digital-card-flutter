@@ -34,10 +34,20 @@ class Routes {
   static const String employeeMeetings = '/employee/meetings';
   static const String employeeTodos = '/employee/todos';
   static const String employeeContacts = '/employee/contacts';
+  static const String employeeContactAdd = '/employee/contacts/add';
+  static const String employeeContactDetail = '/employee/contacts/detail/:id';
   static const String employeeNetworking = '/employee/networking';
+
+  // Messaging
+  static const String threads = '/comms';
+  static const String employeeThreads = '/employee/messaging';
 
   static String cardDetailPath(String id) => '/cards/$id';
   static String cardEditPath(String id) => '/cards/$id/edit';
   static String publicCardPath(String slug) => '/c/$slug';
   static String contactDetailPath(String id) => '/contacts/detail/$id';
+  static String employeeContactDetailPath(String id) =>
+      '/employee/contacts/detail/$id';
+  static String threadDetailPath(String id) => '/comms/$id';
+  static String employeeThreadDetailPath(String id) => '/employee/messaging/$id';
 }
