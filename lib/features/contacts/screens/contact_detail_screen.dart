@@ -3,11 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../providers/contacts_provider.dart';
 import '../domain/contact_model.dart';
-import '../../../shared/widgets/card_widget.dart';
-import '../../cards/providers/cards_provider.dart';
-import '../../cards/domain/card_model.dart';
 import '../../messaging/widgets/start_thread_button.dart';
 import '../../../core/providers/session_provider.dart';
+import '../../../core/theme/app_colors.dart';
 
 class ContactDetailScreen extends ConsumerWidget {
   const ContactDetailScreen({super.key, required this.contactId});
@@ -30,10 +28,7 @@ class ContactDetailScreen extends ConsumerWidget {
               const SizedBox(height: 16),
               const Text('Contact not found or access denied.'),
               const SizedBox(height: 16),
-              OutlinedButton(
-                onPressed: () => context.pop(),
-                child: const Text('Go Back'),
-              ),
+              OutlinedButton(onPressed: () => context.pop(), child: const Text('Go Back')),
             ],
           ),
         ),
@@ -45,7 +40,6 @@ class ContactDetailScreen extends ConsumerWidget {
 
 class _ContactDetailView extends ConsumerStatefulWidget {
   const _ContactDetailView({required this.contact});
-
   final ContactModel contact;
 
   @override
@@ -61,115 +55,180 @@ class _ContactDetailViewState extends ConsumerState<_ContactDetailView> {
     _contact = widget.contact;
   }
 
+  static String _initials(String name) {
+    final parts = name.trim().split(' ');
+    if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    if (parts[0].isNotEmpty) return parts[0][0].toUpperCase();
+    return '?';
+  }
+
+  static Color _avatarColor(String name) {
+    final colors = [
+      Colors.indigo.shade400,
+      Colors.teal.shade400,
+      Colors.purple.shade400,
+      Colors.orange.shade400,
+      Colors.pink.shade400,
+    ];
+    return colors[name.hashCode.abs() % colors.length];
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final myId = ref.watch(userSessionProvider) ?? '';
+    final peer = _contact.peer(myId);
+    final displayName = peer?.displayName ?? '—';
+    final myNotes = _contact.myNotes(myId);
+    final connectedSince = _contact.updatedAt;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_contact.displayName),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.delete_outline),
-            onPressed: () => _confirmDelete(context),
-          ),
-        ],
+        title: Text(displayName,
+            style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Divider(height: 1, color: cs.outline),
+          child: Divider(height: 1, color: cs.outlineVariant),
         ),
+        actions: [
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'notes') _editNotes(context, myId);
+              if (value == 'remove') _confirmRemove(context);
+              if (value == 'block') _confirmBlock(context);
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'notes', child: Text('Update Notes')),
+              PopupMenuItem(value: 'remove', child: Text('Remove Contact')),
+              PopupMenuItem(value: 'block', child: Text('Block')),
+            ],
+          ),
+        ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (_contact.card != null) ...[
-              CardWidget(data: _contact.card!.data),
-              const SizedBox(height: 24),
-            ] else ...[
-              _DeletedCardBanner(slug: _contact.cardSlug),
-              const SizedBox(height: 16),
-            ],
-            _SourceRow(source: _contact.source),
-            const SizedBox(height: 16),
-            _NotesSection(
-              notes: _contact.notes,
-              onEdit: () => _editNotes(context),
-            ),
-            const SizedBox(height: 24),
-            Builder(builder: (context) {
-              final selfId = ref.watch(userSessionProvider);
-              final isSelf = _contact.contactUserId != null &&
-                  _contact.contactUserId == selfId;
-              if (isSelf) return const SizedBox.shrink();
-              final hasAccount = _contact.contactUserId != null;
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+            // ── Avatar + name header ────────────────────────────────────────
+            Center(
+              child: Column(
                 children: [
-                  if (hasAccount)
-                    StartThreadButton(contactId: _contact.id)
-                  else
-                    OutlinedButton.icon(
-                      onPressed: null,
-                      icon: const Icon(Icons.chat_bubble_outline, size: 16),
-                      label: const Text('Message (not on Digital Card)'),
+                  CircleAvatar(
+                    radius: 44,
+                    backgroundColor: _avatarColor(displayName),
+                    child: Text(
+                      _initials(displayName),
+                      style: tt.headlineSmall?.copyWith(
+                          color: Colors.white, fontWeight: FontWeight.bold),
                     ),
-                  if (!hasAccount) ...[
+                  ),
+                  const SizedBox(height: 14),
+                  Text(displayName,
+                      style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+                  if (peer?.displayTitle != null) ...[
                     const SizedBox(height: 4),
-                    Text(
-                      'Invite them by sharing your card below.',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
-                    ),
+                    Text(peer!.displayTitle!,
+                        style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
                   ],
-                  const SizedBox(height: 12),
+                  if (peer?.displayCompany != null) ...[
+                    const SizedBox(height: 2),
+                    Text(peer!.displayCompany!,
+                        style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                  ],
                 ],
-              );
-            }),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () => _shareMyCard(context),
-                icon: const Icon(Icons.send_outlined, size: 16),
-                label: const Text('Share My Card'),
               ),
             ),
+            const SizedBox(height: 28),
+
+            // ── Card info ────────────────────────────────────────────────────
+            if (peer?.card != null) ...[
+              _InfoCard(peer: peer!),
+              const SizedBox(height: 20),
+              StartThreadButton(contactId: _contact.id),
+            ] else ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.badge_outlined, size: 18, color: cs.onSurfaceVariant),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'This person hasn\'t set up their digital card yet.',
+                        style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 24),
+            const Divider(),
+            const SizedBox(height: 16),
+
+            // ── Notes ────────────────────────────────────────────────────────
+            _NotesSection(
+              notes: myNotes,
+              onEdit: () => _editNotes(context, myId),
+            ),
+
+            const SizedBox(height: 20),
+
+            // ── Connected since ───────────────────────────────────────────────
+            Center(
+              child: Text(
+                'Connected ${_timeAgo(connectedSince)}',
+                style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+              ),
+            ),
+            const SizedBox(height: 40),
           ],
         ),
       ),
     );
   }
 
-  Future<void> _editNotes(BuildContext context) async {
+  String _timeAgo(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inDays > 365) return '${(diff.inDays / 365).floor()} year(s) ago';
+    if (diff.inDays > 30) return '${(diff.inDays / 30).floor()} month(s) ago';
+    if (diff.inDays > 0) return '${diff.inDays} day(s) ago';
+    if (diff.inHours > 0) return '${diff.inHours} hour(s) ago';
+    return 'just now';
+  }
+
+  Future<void> _editNotes(BuildContext context, String myId) async {
     final messenger = ScaffoldMessenger.of(context);
-    final controller = TextEditingController(text: _contact.notes ?? '');
+    final current = _contact.myNotes(myId);
+    final controller = TextEditingController(text: current ?? '');
     final result = await showModalBottomSheet<String?>(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => Padding(
         padding: EdgeInsets.fromLTRB(
-          16,
-          16,
-          16,
-          MediaQuery.of(ctx).viewInsets.bottom + 16,
-        ),
+            16, 16, 16, MediaQuery.of(ctx).viewInsets.bottom + 16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Edit Notes', style: Theme.of(ctx).textTheme.titleMedium),
+            Text('Notes', style: Theme.of(ctx).textTheme.titleMedium),
             const SizedBox(height: 12),
             TextField(
               controller: controller,
               autofocus: true,
               maxLines: 4,
               decoration: const InputDecoration(
-                hintText: 'Add a note about this contact…',
+                hintText: 'Add a note about this person…',
                 border: OutlineInputBorder(),
               ),
             ),
@@ -178,14 +237,13 @@ class _ContactDetailViewState extends ConsumerState<_ContactDetailView> {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Cancel'),
-                ),
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Cancel')),
                 const SizedBox(width: 8),
                 FilledButton(
-                  onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-                  child: const Text('Save'),
-                ),
+                    onPressed: () =>
+                        Navigator.pop(ctx, controller.text.trim()),
+                    child: const Text('Save')),
               ],
             ),
           ],
@@ -194,92 +252,32 @@ class _ContactDetailViewState extends ConsumerState<_ContactDetailView> {
     );
 
     if (result == null || !mounted) return;
-
     final notes = result.isEmpty ? null : result;
-    final err = await ref.read(contactsProvider.notifier).updateNotes(_contact.id, notes);
-
+    final err =
+        await ref.read(contactsProvider.notifier).updateNotes(_contact.id, notes);
     if (!mounted) return;
     if (err != null) {
       messenger.showSnackBar(SnackBar(content: Text(err)));
     } else {
       ref.invalidate(contactDetailProvider(_contact.id));
-      setState(() => _contact = _contact.copyWith(notes: notes));
     }
   }
 
-  Future<void> _shareMyCard(BuildContext context) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final cardsAsync = ref.read(cardsProvider);
-    final myCards = cardsAsync.valueOrNull?.where((c) => c.isActive).toList() ?? [];
-
-    if (myCards.isEmpty) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('You have no active card to share.')),
-      );
-      return;
-    }
-
-    String? selectedCardId;
-    if (myCards.length > 1) {
-      selectedCardId = await _pickCard(context, myCards);
-      if (selectedCardId == null || !mounted) return;
-    } else {
-      selectedCardId = myCards.first.id;
-    }
-
-    final (email, err) = await ref
-        .read(contactsProvider.notifier)
-        .shareMyCard(_contact.id, cardId: selectedCardId);
-
-    if (!mounted) return;
-    if (err != null) {
-      messenger.showSnackBar(SnackBar(content: Text(err)));
-    } else {
-      messenger.showSnackBar(SnackBar(content: Text('Card shared with $email')));
-    }
-  }
-
-  Future<String?> _pickCard(BuildContext context, List<CardModel> cards) async {
-    return showModalBottomSheet<String>(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Text('Choose which card to share',
-                style: Theme.of(ctx).textTheme.titleMedium),
-          ),
-          ...cards.map(
-            (c) => ListTile(
-              leading: const Icon(Icons.badge_outlined),
-              title: Text(c.data.name),
-              subtitle: c.data.title != null ? Text(c.data.title!) : null,
-              onTap: () => Navigator.pop(ctx, c.id),
-            ),
-          ),
-          const SizedBox(height: 16),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _confirmDelete(BuildContext context) async {
+  Future<void> _confirmRemove(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);
     final router = GoRouter.of(context);
+    final myId = ref.read(userSessionProvider) ?? '';
+    final peer = _contact.peer(myId);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Remove contact?'),
-        content: Text('${_contact.displayName} will be removed from your contacts.'),
+        title: const Text('Remove connection?'),
+        content: Text(
+            '${peer?.displayName ?? 'This person'} will be removed from your contacts.'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             child: Text('Remove',
@@ -288,40 +286,103 @@ class _ContactDetailViewState extends ConsumerState<_ContactDetailView> {
         ],
       ),
     );
-
     if (confirmed != true || !mounted) return;
-
-    final err = await ref.read(contactsProvider.notifier).delete(_contact.id);
+    final err = await ref.read(contactsProvider.notifier).removeContact(_contact.id);
     if (!mounted) return;
-
     if (err != null) {
       messenger.showSnackBar(SnackBar(content: Text(err)));
     } else {
       router.pop();
     }
   }
+
+  Future<void> _confirmBlock(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Block this person?'),
+        content: const Text('They will not be able to send you connection requests.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Block',
+                style: TextStyle(color: Theme.of(ctx).colorScheme.error)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await ref.read(contactRepositoryProvider).block(_contact.id);
+      if (!mounted) return;
+      GoRouter.of(context).pop();
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(const SnackBar(content: Text('Failed to block.')));
+    }
+  }
 }
 
-class _SourceRow extends StatelessWidget {
-  const _SourceRow({required this.source});
-
-  final String source;
+class _InfoCard extends StatelessWidget {
+  const _InfoCard({required this.peer});
+  final ContactPeer peer;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final (label, icon) = switch (source) {
-      'scan' => ('Added via QR scan', Icons.qr_code_2),
-      'email_import' => ('Added via email', Icons.email_outlined),
-      'phone_import' => ('Added via phone import', Icons.phone_outlined),
-      _ => ('Added manually', Icons.person_add_outlined),
-    };
+    final card = peer.card!;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          if (card.email != null)
+            _InfoRow(icon: Icons.email_outlined, text: card.email!, tt: tt, cs: cs),
+          if (card.phone != null) ...[
+            const SizedBox(height: 10),
+            _InfoRow(icon: Icons.phone_outlined, text: card.phone!, tt: tt, cs: cs),
+          ],
+          if (card.company != null) ...[
+            const SizedBox(height: 10),
+            _InfoRow(icon: Icons.business_outlined, text: card.company!, tt: tt, cs: cs),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  const _InfoRow({
+    required this.icon,
+    required this.text,
+    required this.tt,
+    required this.cs,
+  });
+  final IconData icon;
+  final String text;
+  final TextTheme tt;
+  final ColorScheme cs;
+
+  @override
+  Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon, size: 16, color: cs.onSurfaceVariant),
-        const SizedBox(width: 6),
-        Text(label, style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+        Icon(icon, size: 18, color: AppColors.primary),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(text,
+              style: tt.bodyMedium, overflow: TextOverflow.ellipsis),
+        ),
       ],
     );
   }
@@ -329,7 +390,6 @@ class _SourceRow extends StatelessWidget {
 
 class _NotesSection extends StatelessWidget {
   const _NotesSection({required this.notes, required this.onEdit});
-
   final String? notes;
   final VoidCallback onEdit;
 
@@ -353,7 +413,7 @@ class _NotesSection extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 6),
         if (notes != null && notes!.isNotEmpty)
           Container(
             width: double.infinity,
@@ -373,48 +433,13 @@ class _NotesSection extends StatelessWidget {
               decoration: BoxDecoration(
                 color: cs.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: cs.outline, width: 0.5),
+                border: Border.all(color: cs.outlineVariant),
               ),
-              child: Text(
-                'Tap to add a note…',
-                style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
-              ),
+              child: Text('Tap to add a note…',
+                  style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
             ),
           ),
       ],
-    );
-  }
-}
-
-class _DeletedCardBanner extends StatelessWidget {
-  const _DeletedCardBanner({required this.slug});
-
-  final String? slug;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: cs.errorContainer,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.warning_amber_outlined, color: cs.onErrorContainer),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              slug != null
-                  ? 'This contact removed their card (slug: $slug).'
-                  : 'This contact\'s card is no longer available.',
-              style: tt.bodySmall?.copyWith(color: cs.onErrorContainer),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

@@ -17,6 +17,7 @@ class Routes {
   static const String others = '/others';
   static const String contacts = '/contacts';
   static const String contactAdd = '/contacts/add';
+  static const String contactPending = '/contacts/pending';
   static const String contactDetail = '/contacts/detail/:id';
   static const String networking = '/networking';
   static const String me = '/me';
@@ -35,6 +36,7 @@ class Routes {
   static const String employeeTodos = '/employee/todos';
   static const String employeeContacts = '/employee/contacts';
   static const String employeeContactAdd = '/employee/contacts/add';
+  static const String employeeContactPending = '/employee/contacts/pending';
   static const String employeeContactDetail = '/employee/contacts/detail/:id';
   static const String employeeNetworking = '/employee/networking';
 

@@ -24,6 +24,7 @@ import '../../features/mail/screens/mail_screen.dart';
 import '../../features/contacts/screens/contacts_screen.dart';
 import '../../features/contacts/screens/contact_detail_screen.dart';
 import '../../features/contacts/screens/add_contact_screen.dart';
+import '../../features/contacts/screens/pending_requests_screen.dart';
 import '../../features/messaging/screens/threads_screen.dart';
 import '../../features/messaging/screens/thread_detail_screen.dart';
 import '../../shared/screens/placeholder_screen.dart';
@@ -102,6 +103,10 @@ final routerProvider = Provider<GoRouter>((ref) {
                 GoRoute(
                   path: 'add',
                   builder: (_, __) => const AddContactScreen(),
+                ),
+                GoRoute(
+                  path: 'pending',
+                  builder: (_, __) => const PendingRequestsScreen(),
                 ),
                 GoRoute(
                   path: 'detail/:id',
@@ -203,6 +208,10 @@ final routerProvider = Provider<GoRouter>((ref) {
                 GoRoute(
                   path: 'add',
                   builder: (_, __) => const AddContactScreen(),
+                ),
+                GoRoute(
+                  path: 'pending',
+                  builder: (_, __) => const PendingRequestsScreen(),
                 ),
                 GoRoute(
                   path: 'detail/:id',

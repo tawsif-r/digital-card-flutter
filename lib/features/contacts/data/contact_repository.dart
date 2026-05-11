@@ -4,12 +4,10 @@ import '../../../shared/domain/paged_result.dart';
 
 class ContactRepository {
   ContactRepository(this._dio);
-
   final Dio _dio;
 
-  Future<PagedResult<ContactModel>> getAll({
+  Future<PagedResult<ContactModel>> getAccepted({
     String? search,
-    String? source,
     int page = 1,
     int limit = 20,
   }) async {
@@ -17,7 +15,6 @@ class ContactRepository {
       '/contacts',
       queryParameters: {
         if (search != null && search.isNotEmpty) 'search': search,
-        if (source != null) 'source': source,
         'page': page,
         'limit': limit,
       },
@@ -25,38 +22,49 @@ class ContactRepository {
     return PagedResult.fromJson(res.data!, ContactModel.fromJson);
   }
 
+  Future<List<ContactModel>> getPending() async {
+    final res = await _dio.get<List<dynamic>>('/contacts/pending');
+    return (res.data ?? [])
+        .map((e) => ContactModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<ContactModel>> getSent() async {
+    final res = await _dio.get<List<dynamic>>('/contacts/sent');
+    return (res.data ?? [])
+        .map((e) => ContactModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
   Future<ContactModel> getOne(String id) async {
     final res = await _dio.get('/contacts/$id');
     return ContactModel.fromJson(res.data as Map<String, dynamic>);
   }
 
-  Future<ContactModel> addBySlug(String slug, {String? notes}) async {
-    final res = await _dio.post('/contacts/scan', data: {
-      'slug': slug,
-      if (notes != null && notes.isNotEmpty) 'notes': notes,
-    });
+  Future<ContactModel> sendRequest(String addresseeId) async {
+    final res = await _dio.post(
+      '/contacts/request',
+      data: {'addressee_id': addresseeId},
+    );
     return ContactModel.fromJson(res.data as Map<String, dynamic>);
   }
 
-  Future<ContactModel> addByEmail(String email, {String? notes}) async {
-    final res = await _dio.post('/contacts/import/email', data: {
-      'email': email,
-      if (notes != null && notes.isNotEmpty) 'notes': notes,
-    });
+  Future<ContactModel> accept(String id) async {
+    final res = await _dio.post('/contacts/$id/accept');
     return ContactModel.fromJson(res.data as Map<String, dynamic>);
   }
 
-  Future<PhoneImportResult> importFromPhone(
-    List<Map<String, String?>> contacts,
-  ) async {
-    final res = await _dio.post('/contacts/import/phone', data: {
-      'contacts': contacts,
-    });
-    return PhoneImportResult.fromJson(res.data as Map<String, dynamic>);
+  Future<void> reject(String id) async {
+    await _dio.post('/contacts/$id/reject');
+  }
+
+  Future<ContactModel> block(String id) async {
+    final res = await _dio.post('/contacts/$id/block');
+    return ContactModel.fromJson(res.data as Map<String, dynamic>);
   }
 
   Future<ContactModel> updateNotes(String id, String? notes) async {
-    final res = await _dio.patch('/contacts/$id', data: {'notes': notes});
+    final res = await _dio.patch('/contacts/$id/notes', data: {'notes': notes});
     return ContactModel.fromJson(res.data as Map<String, dynamic>);
   }
 
@@ -64,17 +72,15 @@ class ContactRepository {
     await _dio.delete('/contacts/$id');
   }
 
-  Future<Map<String, String>> shareMyCard(
-    String contactId, {
-    String? cardId,
+  Future<PagedResult<UserSearchResult>> searchUsers({
+    required String q,
+    int page = 1,
+    int limit = 20,
   }) async {
-    final res = await _dio.post('/contacts/$contactId/share-my-card', data: {
-      if (cardId != null) 'card_id': cardId,
-    });
-    final data = res.data as Map<String, dynamic>;
-    return {
-      'message': data['message'] as String,
-      'recipient_email': data['recipient_email'] as String,
-    };
+    final res = await _dio.get<Map<String, dynamic>>(
+      '/users/search',
+      queryParameters: {'q': q, 'page': page, 'limit': limit},
+    );
+    return PagedResult.fromJson(res.data!, UserSearchResult.fromJson);
   }
 }
