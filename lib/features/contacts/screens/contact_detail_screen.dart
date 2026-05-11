@@ -6,6 +6,8 @@ import '../domain/contact_model.dart';
 import '../../../shared/widgets/card_widget.dart';
 import '../../cards/providers/cards_provider.dart';
 import '../../cards/domain/card_model.dart';
+import '../../messaging/widgets/start_thread_button.dart';
+import '../../../core/providers/session_provider.dart';
 
 class ContactDetailScreen extends ConsumerWidget {
   const ContactDetailScreen({super.key, required this.contactId});
@@ -96,6 +98,36 @@ class _ContactDetailViewState extends ConsumerState<_ContactDetailView> {
               onEdit: () => _editNotes(context),
             ),
             const SizedBox(height: 24),
+            Builder(builder: (context) {
+              final selfId = ref.watch(userSessionProvider);
+              final isSelf = _contact.contactUserId != null &&
+                  _contact.contactUserId == selfId;
+              if (isSelf) return const SizedBox.shrink();
+              final hasAccount = _contact.contactUserId != null;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (hasAccount)
+                    StartThreadButton(contactId: _contact.id)
+                  else
+                    OutlinedButton.icon(
+                      onPressed: null,
+                      icon: const Icon(Icons.chat_bubble_outline, size: 16),
+                      label: const Text('Message (not on Digital Card)'),
+                    ),
+                  if (!hasAccount) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Invite them by sharing your card below.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                ],
+              );
+            }),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(

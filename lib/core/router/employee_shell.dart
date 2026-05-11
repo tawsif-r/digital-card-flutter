@@ -5,6 +5,7 @@ import '../theme/app_colors.dart';
 import '../theme/theme_provider.dart';
 import '../constants.dart';
 import '../../features/auth/providers/auth_provider.dart';
+import '../../features/messaging/providers/threads_provider.dart';
 import 'routes.dart';
 
 class EmployeeShell extends ConsumerWidget {
@@ -111,6 +112,7 @@ class _SidebarContent extends ConsumerWidget {
                 _SectionLabel('Network'),
                 _NavItem(label: 'Contacts', icon: Icons.contacts_outlined, route: Routes.employeeContacts, shell: navigationShell),
                 _NavItem(label: 'Networking', icon: Icons.people_outline, route: Routes.employeeNetworking, shell: navigationShell),
+                _MessagesNavItem(shell: navigationShell, route: Routes.employeeThreads),
               ],
             ),
           ),
@@ -290,6 +292,86 @@ class _ThemeToggle extends ConsumerWidget {
     return IconButton(
       icon: Icon(isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
       onPressed: () => ref.read(themeProvider.notifier).toggle(),
+    );
+  }
+}
+
+class _MessagesNavItem extends ConsumerWidget {
+  const _MessagesNavItem({required this.shell, required this.route});
+  final StatefulNavigationShell shell;
+  final String route;
+
+  bool _isActive(BuildContext context) {
+    final loc = GoRouterState.of(context).matchedLocation;
+    return loc == route || loc.startsWith('$route/');
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final unread = ref.watch(unreadTotalProvider);
+    final active = _isActive(context);
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: () {
+            context.go(route);
+            if (Scaffold.of(context).hasDrawer) {
+              Scaffold.of(context).closeDrawer();
+            }
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: active
+                  ? AppColors.primary.withValues(alpha: 0.12)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.forum_outlined,
+                    size: 18,
+                    color: active ? AppColors.primary : cs.onSurfaceVariant),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Messages',
+                    style: tt.bodyMedium?.copyWith(
+                      color: active ? AppColors.primary : cs.onSurface,
+                      fontWeight:
+                          active ? FontWeight.w600 : FontWeight.w400,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (unread > 0)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      unread > 99 ? '99+' : unread.toString(),
+                      style: tt.labelSmall?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

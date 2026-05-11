@@ -7,6 +7,10 @@ import '../domain/contact_model.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/loading_shimmer.dart';
+import '../../auth/domain/user_model.dart';
+import '../../auth/providers/auth_provider.dart';
+import '../../../core/providers/session_provider.dart';
+import '../../messaging/providers/threads_provider.dart';
 
 class ContactsScreen extends ConsumerStatefulWidget {
   const ContactsScreen({super.key});
@@ -53,6 +57,13 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
     final contactsAsync = ref.watch(contactsProvider);
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final isEmployee =
+        ref.watch(authProvider).user?.role == UserRole.employee;
+    final addPath =
+        isEmployee ? Routes.employeeContactAdd : Routes.contactAdd;
+    String detailPath(String id) => isEmployee
+        ? Routes.employeeContactDetailPath(id)
+        : Routes.contactDetailPath(id);
 
     return Scaffold(
       appBar: AppBar(
@@ -95,13 +106,14 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                           physics: const AlwaysScrollableScrollPhysics(),
                           child: SizedBox(
                             height: constraints.maxHeight,
-                            child: _EmptyState(onAdd: () => context.push(Routes.contactAdd)),
+                            child: _EmptyState(onAdd: () => context.push(addPath)),
                           ),
                         ),
                       )
                     : _ContactList(
                         state: state,
                         scrollController: _scrollController,
+                        detailPathFor: detailPath,
                       ),
               ),
             ),
@@ -109,7 +121,7 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.push(Routes.contactAdd),
+        onPressed: () => context.push(addPath),
         icon: const Icon(Icons.person_add_outlined, size: 20),
         label: const Text('Add Contact'),
         elevation: 2,
@@ -196,10 +208,15 @@ class _SourceFilterRow extends StatelessWidget {
 }
 
 class _ContactList extends ConsumerWidget {
-  const _ContactList({required this.state, required this.scrollController});
+  const _ContactList({
+    required this.state,
+    required this.scrollController,
+    required this.detailPathFor,
+  });
 
   final ContactsState state;
   final ScrollController scrollController;
+  final String Function(String id) detailPathFor;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -218,27 +235,36 @@ class _ContactList extends ConsumerWidget {
             ),
           );
         }
-        return _ContactTile(contact: state.contacts[i]);
+        return _ContactTile(
+          contact: state.contacts[i],
+          detailPathFor: detailPathFor,
+        );
       },
     );
   }
 }
 
-class _ContactTile extends StatelessWidget {
-  const _ContactTile({required this.contact});
+class _ContactTile extends ConsumerWidget {
+  const _ContactTile({required this.contact, required this.detailPathFor});
 
   final ContactModel contact;
+  final String Function(String id) detailPathFor;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final initials = _initials(contact.displayName);
+    final selfId = ref.watch(userSessionProvider);
+    final isSelf = contact.contactUserId != null &&
+        contact.contactUserId == selfId;
+    final hasAccount = contact.contactUserId != null;
+    final showMessageIcon = !isSelf;
 
     return Card(
       margin: EdgeInsets.zero,
       child: ListTile(
-        onTap: () => context.push(Routes.contactDetailPath(contact.id)),
+        onTap: () => context.push(detailPathFor(contact.id)),
         leading: CircleAvatar(
           backgroundColor: AppColors.primary.withValues(alpha: 0.15),
           child: Text(
@@ -256,7 +282,17 @@ class _ContactTile extends StatelessWidget {
               Text(contact.displayEmail!, style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
           ],
         ),
-        trailing: _SourceBadge(source: contact.source),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (showMessageIcon)
+              _MessageIconButton(
+                contactId: contact.id,
+                hasAccount: hasAccount,
+              ),
+            _SourceBadge(source: contact.source),
+          ],
+        ),
         isThreeLine: contact.displayCompany != null && contact.displayEmail != null,
       ),
     );
@@ -267,6 +303,85 @@ class _ContactTile extends StatelessWidget {
     if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
     if (parts[0].isNotEmpty) return parts[0][0].toUpperCase();
     return '?';
+  }
+}
+
+class _MessageIconButton extends ConsumerStatefulWidget {
+  const _MessageIconButton({
+    required this.contactId,
+    required this.hasAccount,
+  });
+
+  final String contactId;
+  final bool hasAccount;
+
+  @override
+  ConsumerState<_MessageIconButton> createState() => _MessageIconButtonState();
+}
+
+class _MessageIconButtonState extends ConsumerState<_MessageIconButton> {
+  bool _busy = false;
+
+  void _showInviteHint() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'This contact is not on Digital Card yet. Open the contact and tap "Share My Card" to invite them.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _open() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final (threadId, err) = await ref
+          .read(threadsProvider.notifier)
+          .createOrGetThread(contactId: widget.contactId);
+      if (!mounted) return;
+      if (err != null) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(err)));
+        return;
+      }
+      if (threadId == null) return;
+      final isEmployee =
+          ref.read(authProvider).user?.role == UserRole.employee;
+      if (!mounted) return;
+      context.push(isEmployee
+          ? Routes.employeeThreadDetailPath(threadId)
+          : Routes.threadDetailPath(threadId));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final iconColor =
+        widget.hasAccount ? AppColors.primary : cs.onSurfaceVariant;
+    return IconButton(
+      tooltip: widget.hasAccount ? 'Message' : 'Not on Digital Card — invite',
+      onPressed: _busy
+          ? null
+          : (widget.hasAccount ? _open : _showInviteHint),
+      icon: _busy
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Icon(
+              widget.hasAccount
+                  ? Icons.chat_bubble_outline
+                  : Icons.person_add_alt_1_outlined,
+              size: 20,
+              color: iconColor,
+            ),
+      visualDensity: VisualDensity.compact,
+    );
   }
 }
 
