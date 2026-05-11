@@ -38,6 +38,7 @@ class UserProfile {
       };
 
   UserProfile copyWith({
+    String? email,
     String? fullName,
     String? phone,
     String? designation,
@@ -46,7 +47,7 @@ class UserProfile {
   }) =>
       UserProfile(
         id: id,
-        email: email,
+        email: email ?? this.email,
         fullName: fullName ?? this.fullName,
         phone: phone ?? this.phone,
         designation: designation ?? this.designation,

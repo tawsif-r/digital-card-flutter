@@ -10,17 +10,13 @@ class DashboardRepository {
   final Dio _dio;
 
   Future<List<ActivityItem>> getActivity() async {
-    if (AppConfig.useMock) return MockService.getActivity();
-    final res = await _dio.get('/api/activity');
-    return (res.data['data'] as List)
-        .map((e) => ActivityItem.fromJson(e as Map<String, dynamic>))
-        .toList();
+    // TODO: wire to real endpoint when backend ready
+    return MockService.getActivity();
   }
 
   Future<int> getTaskCount() async {
-    if (AppConfig.useMock) return MockService.getTaskCount();
-    final res = await _dio.get('/api/tasks/count');
-    return res.data['data']['pending'] as int;
+    // TODO: wire to real endpoint when backend ready
+    return MockService.getTaskCount();
   }
 
   Future<List<TaskModel>> getTasks() async {
