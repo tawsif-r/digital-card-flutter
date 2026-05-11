@@ -45,13 +45,19 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
     );
   }
 
-  Future<(bool, String?)> updateProfile(UserProfile profile) async {
+  Future<(bool, String?)> updateProfile(
+    UserProfile profile, {
+    String? currentPassword,
+  }) async {
     final previous = state.valueOrNull;
     if (previous != null) {
       state = AsyncData(previous.copyWith(profile: profile));
     }
     try {
-      final updated = await ref.read(settingsRepositoryProvider).updateProfile(profile);
+      final updated = await ref.read(settingsRepositoryProvider).updateProfile(
+            profile,
+            currentPassword: currentPassword,
+          );
       state = AsyncData((state.valueOrNull ?? previous)!.copyWith(profile: updated));
       return (true, null);
     } catch (e) {

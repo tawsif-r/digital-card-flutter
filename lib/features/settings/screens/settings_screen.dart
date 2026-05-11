@@ -110,6 +110,16 @@ class _SettingsBodyState extends State<_SettingsBody> {
     super.dispose();
   }
 
+  UserProfile _liveProfile() => UserProfile(
+        id: widget.profile.id,
+        email: _email.text.trim().isNotEmpty ? _email.text.trim() : widget.profile.email,
+        fullName: _fullName.text.trim().isNotEmpty ? _fullName.text.trim() : widget.profile.fullName,
+        phone: widget.profile.phone,
+        designation: widget.profile.designation,
+        department: widget.profile.department,
+        company: widget.profile.company,
+      );
+
   @override
   Widget build(BuildContext context) {
     return Consumer(
@@ -118,7 +128,10 @@ class _SettingsBodyState extends State<_SettingsBody> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _ProfileCard(profile: widget.profile, role: widget.role),
+            ListenableBuilder(
+              listenable: Listenable.merge([_fullName, _email]),
+              builder: (_, __) => _ProfileCard(profile: _liveProfile(), role: widget.role),
+            ),
             const SizedBox(height: 24),
             const Divider(),
             const SizedBox(height: 24),
@@ -274,14 +287,27 @@ class _SettingsBodyState extends State<_SettingsBody> {
 
   Future<void> _saveProfile(WidgetRef ref) async {
     if (!_formKey.currentState!.validate()) return;
+
+    final newEmail = _email.text.trim();
+    final newName = _fullName.text.trim();
+    final anyChanged = newEmail != widget.profile.email ||
+        newName != (widget.profile.fullName ?? '');
+
+    if (!anyChanged) return;
+
+    final currentPassword = await _showPasswordDialog();
+    if (currentPassword == null) return; // user cancelled
+
     setState(() => _savingProfile = true);
 
     final updated = widget.profile.copyWith(
-      email: _email.text.trim(),
-      fullName: _fullName.text.trim(),
+      email: newEmail,
+      fullName: newName,
     );
 
-    final (ok, err) = await ref.read(settingsProvider.notifier).updateProfile(updated);
+    final (ok, err) = await ref
+        .read(settingsProvider.notifier)
+        .updateProfile(updated, currentPassword: currentPassword);
 
     if (!mounted) return;
     setState(() => _savingProfile = false);
@@ -293,6 +319,64 @@ class _SettingsBodyState extends State<_SettingsBody> {
         behavior: SnackBarBehavior.floating,
       ),
     );
+  }
+
+  Future<String?> _showPasswordDialog() async {
+    final controller = TextEditingController();
+    var obscure = true;
+
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setStateDialog) => AlertDialog(
+          title: const Text('Confirm your password'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Enter your current password to save profile changes.',
+                style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: controller,
+                obscureText: obscure,
+                autofocus: true,
+                decoration: InputDecoration(
+                  labelText: 'Current password',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                      size: 18,
+                    ),
+                    onPressed: () => setStateDialog(() => obscure = !obscure),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(null),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final pw = controller.text.trim();
+                if (pw.isEmpty) return;
+                Navigator.of(ctx).pop(pw);
+              },
+              child: const Text('Confirm'),
+            ),
+          ],
+        ),
+      ),
+    ).whenComplete(controller.dispose);
   }
 
   Future<void> _savePassword(WidgetRef ref) async {

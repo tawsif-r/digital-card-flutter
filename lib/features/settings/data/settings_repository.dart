@@ -18,11 +18,16 @@ class SettingsRepository {
     );
   }
 
-  Future<UserProfile> updateProfile(UserProfile profile) async {
+  Future<UserProfile> updateProfile(
+    UserProfile profile, {
+    String? currentPassword,
+  }) async {
     final res = await _dio.patch('/users/me', data: {
       if (profile.fullName != null && profile.fullName!.isNotEmpty)
         'name': profile.fullName,
       'email': profile.email,
+      if (currentPassword != null && currentPassword.isNotEmpty)
+        'current_password': currentPassword,
     });
     final data = res.data as Map<String, dynamic>;
     return UserProfile(
