@@ -1,8 +1,7 @@
-enum ContactStatus { pending, accepted, rejected, blocked }
+enum ContactStatus { pending, accepted, blocked }
 
 ContactStatus _statusFromString(String s) => switch (s) {
       'accepted' => ContactStatus.accepted,
-      'rejected' => ContactStatus.rejected,
       'blocked' => ContactStatus.blocked,
       _ => ContactStatus.pending,
     };
@@ -74,8 +73,7 @@ class ContactModel {
     required this.updatedAt,
     this.notes,
     this.addresseeNotes,
-    this.requester,
-    this.addressee,
+    this.peerData,
   });
 
   final String id;
@@ -84,13 +82,13 @@ class ContactModel {
   final ContactStatus status;
   final String? notes;
   final String? addresseeNotes;
-  final ContactPeer? requester;
-  final ContactPeer? addressee;
+  // Backend enriches and returns the other person as `peer` (already resolved server-side)
+  final ContactPeer? peerData;
   final DateTime createdAt;
   final DateTime updatedAt;
 
-  ContactPeer? peer(String myUserId) =>
-      requesterId == myUserId ? addressee : requester;
+  // Backend already resolved peer relative to current user; fall back gracefully
+  ContactPeer? peer(String myUserId) => peerData;
 
   String? myNotes(String myUserId) =>
       requesterId == myUserId ? notes : addresseeNotes;
@@ -107,8 +105,7 @@ class ContactModel {
         status: status ?? this.status,
         notes: notes ?? this.notes,
         addresseeNotes: addresseeNotes ?? this.addresseeNotes,
-        requester: requester,
-        addressee: addressee,
+        peerData: peerData,
         createdAt: createdAt,
         updatedAt: updatedAt,
       );
@@ -120,11 +117,8 @@ class ContactModel {
         status: _statusFromString(json['status'] as String? ?? 'pending'),
         notes: json['notes'] as String?,
         addresseeNotes: json['addressee_notes'] as String?,
-        requester: json['requester'] != null
-            ? ContactPeer.fromJson(json['requester'] as Map<String, dynamic>)
-            : null,
-        addressee: json['addressee'] != null
-            ? ContactPeer.fromJson(json['addressee'] as Map<String, dynamic>)
+        peerData: json['peer'] != null
+            ? ContactPeer.fromJson(json['peer'] as Map<String, dynamic>)
             : null,
         createdAt: DateTime.parse(json['created_at'] as String),
         updatedAt: DateTime.parse(json['updated_at'] as String),

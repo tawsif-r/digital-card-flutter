@@ -19,6 +19,7 @@ class ContactsState {
     this.isLoadingMore = false,
     this.search,
     this.pendingCount = 0,
+    this.sentCount = 0,
   });
 
   final List<ContactModel> contacts;
@@ -27,6 +28,7 @@ class ContactsState {
   final bool isLoadingMore;
   final String? search;
   final int pendingCount;
+  final int sentCount;
 
   bool get hasMore => contacts.length < total;
 
@@ -37,6 +39,7 @@ class ContactsState {
     bool? isLoadingMore,
     String? search,
     int? pendingCount,
+    int? sentCount,
   }) =>
       ContactsState(
         contacts: contacts ?? this.contacts,
@@ -45,6 +48,7 @@ class ContactsState {
         isLoadingMore: isLoadingMore ?? this.isLoadingMore,
         search: search ?? this.search,
         pendingCount: pendingCount ?? this.pendingCount,
+        sentCount: sentCount ?? this.sentCount,
       );
 }
 
@@ -58,14 +62,17 @@ class ContactsNotifier extends AsyncNotifier<ContactsState> {
     final results = await Future.wait([
       ref.read(contactRepositoryProvider).getAccepted(page: 1, limit: _limit),
       ref.read(contactRepositoryProvider).getPending(),
+      ref.read(contactRepositoryProvider).getSent(),
     ]);
     final accepted = results[0] as dynamic;
     final pending = results[1] as List<ContactModel>;
+    final sent = results[2] as List<ContactModel>;
     return ContactsState(
       contacts: accepted.data as List<ContactModel>,
       total: accepted.total as int,
       page: accepted.page as int,
       pendingCount: pending.length,
+      sentCount: sent.length,
     );
   }
 
@@ -80,15 +87,18 @@ class ContactsNotifier extends AsyncNotifier<ContactsState> {
               limit: _limit,
             ),
         ref.read(contactRepositoryProvider).getPending(),
+        ref.read(contactRepositoryProvider).getSent(),
       ]);
       final accepted = results[0] as dynamic;
       final pending = results[1] as List<ContactModel>;
+      final sent = results[2] as List<ContactModel>;
       return ContactsState(
         contacts: accepted.data as List<ContactModel>,
         total: accepted.total as int,
         page: accepted.page as int,
         search: current?.search,
         pendingCount: pending.length,
+        sentCount: sent.length,
       );
     });
   }
@@ -235,6 +245,46 @@ final pendingRequestsProvider =
     AsyncNotifierProvider<PendingRequestsNotifier, List<ContactModel>>(
         PendingRequestsNotifier.new);
 
+// ── Sent Requests ─────────────────────────────────────────────────────────────
+
+class SentRequestsNotifier extends AsyncNotifier<List<ContactModel>> {
+  @override
+  Future<List<ContactModel>> build() async {
+    final userId = ref.watch(userSessionProvider);
+    if (userId == null) return [];
+    return ref.read(contactRepositoryProvider).getSent();
+  }
+
+  Future<String?> cancel(String contactId) async {
+    try {
+      await ref.read(contactRepositoryProvider).delete(contactId);
+      final updated =
+          (state.valueOrNull ?? []).where((c) => c.id != contactId).toList();
+      state = AsyncData(updated);
+      final current = ref.read(contactsProvider).valueOrNull;
+      if (current != null) {
+        ref.read(contactsProvider.notifier).state = AsyncData(
+          current.copyWith(sentCount: (current.sentCount - 1).clamp(0, 9999)),
+        );
+      }
+      return null;
+    } catch (e) {
+      if (e is DioException) {
+        final data = e.response?.data;
+        if (data is Map) {
+          final msg = data['message'];
+          if (msg is String) return msg;
+        }
+      }
+      return 'Something went wrong. Try again.';
+    }
+  }
+}
+
+final sentRequestsProvider =
+    AsyncNotifierProvider<SentRequestsNotifier, List<ContactModel>>(
+        SentRequestsNotifier.new);
+
 // ── Contact Detail ────────────────────────────────────────────────────────────
 
 final contactDetailProvider =
@@ -335,6 +385,14 @@ class UserSearchNotifier extends AsyncNotifier<UserSearchState> {
               .map((u) => u.id == userId ? u.withStatus(ContactStatus.pending) : u)
               .toList(),
         ));
+      }
+      // Refresh sent requests list and badge count
+      ref.invalidate(sentRequestsProvider);
+      final contacts = ref.read(contactsProvider).valueOrNull;
+      if (contacts != null) {
+        ref.read(contactsProvider.notifier).state = AsyncData(
+          contacts.copyWith(sentCount: contacts.sentCount + 1),
+        );
       }
       return null;
     } catch (e) {

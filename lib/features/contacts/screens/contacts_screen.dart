@@ -7,6 +7,7 @@ import '../domain/contact_model.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/loading_shimmer.dart';
+import '../../../shared/widgets/contact_avatar.dart';
 import '../../auth/domain/user_model.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../../core/providers/session_provider.dart';
@@ -65,43 +66,23 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
         : Routes.contactDetailPath(id);
 
     final pendingCount = contactsAsync.valueOrNull?.pendingCount ?? 0;
+    final sentCount = contactsAsync.valueOrNull?.sentCount ?? 0;
 
     return Scaffold(
       appBar: AppBar(
         title: Text('Contacts', style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
         actions: [
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              IconButton(
-                tooltip: 'Connection Requests',
-                icon: const Icon(Icons.notifications_outlined),
-                onPressed: () => context.push(pendingPath),
-              ),
-              if (pendingCount > 0)
-                Positioned(
-                  right: 6,
-                  top: 6,
-                  child: Container(
-                    padding: const EdgeInsets.all(3),
-                    decoration: BoxDecoration(
-                      color: cs.error,
-                      shape: BoxShape.circle,
-                    ),
-                    constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-                    child: Text(
-                      pendingCount > 9 ? '9+' : '$pendingCount',
-                      style: TextStyle(
-                        color: cs.onError,
-                        fontSize: 9,
-                        fontWeight: FontWeight.bold,
-                        height: 1,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ),
-            ],
+          _BadgeIconButton(
+            tooltip: 'Sent Requests',
+            icon: Icons.outbox_outlined,
+            count: sentCount,
+            onTap: () => context.push(pendingPath),
+          ),
+          _BadgeIconButton(
+            tooltip: 'Connection Requests',
+            icon: Icons.notifications_outlined,
+            count: pendingCount,
+            onTap: () => context.push(pendingPath),
           ),
           const SizedBox(width: 4),
         ],
@@ -159,6 +140,51 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
         label: const Text('Find People'),
         elevation: 2,
       ),
+    );
+  }
+}
+
+class _BadgeIconButton extends StatelessWidget {
+  const _BadgeIconButton({
+    required this.tooltip,
+    required this.icon,
+    required this.count,
+    required this.onTap,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final int count;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        IconButton(tooltip: tooltip, icon: Icon(icon), onPressed: onTap),
+        if (count > 0)
+          Positioned(
+            right: 6,
+            top: 6,
+            child: Container(
+              padding: const EdgeInsets.all(3),
+              decoration: BoxDecoration(color: cs.error, shape: BoxShape.circle),
+              constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+              child: Text(
+                count > 9 ? '9+' : '$count',
+                style: TextStyle(
+                  color: cs.onError,
+                  fontSize: 9,
+                  fontWeight: FontWeight.bold,
+                  height: 1,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -246,26 +272,6 @@ class _ContactTile extends ConsumerWidget {
   final ContactModel contact;
   final String Function(String id) detailPathFor;
 
-  static String _initials(String name) {
-    final parts = name.trim().split(' ');
-    if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    if (parts[0].isNotEmpty) return parts[0][0].toUpperCase();
-    return '?';
-  }
-
-  static Color _avatarColor(String name) {
-    final colors = [
-      Colors.indigo.shade400,
-      Colors.teal.shade400,
-      Colors.purple.shade400,
-      Colors.orange.shade400,
-      Colors.pink.shade400,
-      Colors.cyan.shade500,
-      Colors.green.shade500,
-    ];
-    return colors[name.hashCode.abs() % colors.length];
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cs = Theme.of(context).colorScheme;
@@ -273,7 +279,6 @@ class _ContactTile extends ConsumerWidget {
     final myId = ref.watch(userSessionProvider) ?? '';
     final peer = contact.peer(myId);
     final displayName = peer?.displayName ?? '—';
-    final avatarColor = _avatarColor(displayName);
 
     return Card(
       margin: EdgeInsets.zero,
@@ -285,17 +290,14 @@ class _ContactTile extends ConsumerWidget {
       child: ListTile(
         onTap: () => context.push(detailPathFor(contact.id)),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        leading: CircleAvatar(
-          backgroundColor: avatarColor,
-          child: Text(
-            _initials(displayName),
-            style: tt.labelLarge?.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
-          ),
+        leading: ContactAvatar(
+          displayName: displayName,
+          photoUrl: peer?.photoUrl,
+          radius: 22,
         ),
         title: Text(displayName, style: tt.bodyLarge?.copyWith(fontWeight: FontWeight.w600)),
         subtitle: _buildSubtitle(context, peer),
         trailing: _MessageIconButton(contactId: contact.id),
-        isThreeLine: peer?.displayTitle != null && peer?.displayCompany != null,
       ),
     );
   }
@@ -303,13 +305,21 @@ class _ContactTile extends ConsumerWidget {
   Widget? _buildSubtitle(BuildContext context, ContactPeer? peer) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final lines = <String>[
+    final parts = <String>[
       if (peer?.displayTitle != null) peer!.displayTitle!,
       if (peer?.displayCompany != null) peer!.displayCompany!,
     ];
-    if (lines.isEmpty) return null;
+    if (parts.isEmpty) {
+      final email = peer?.displayEmail;
+      return email != null
+          ? Text(email,
+              style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis)
+          : null;
+    }
     return Text(
-      lines.join(' · '),
+      parts.join(' · '),
       style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
       maxLines: 1,
       overflow: TextOverflow.ellipsis,

@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../providers/contacts_provider.dart';
 import '../domain/contact_model.dart';
 import '../../messaging/widgets/start_thread_button.dart';
 import '../../../core/providers/session_provider.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../shared/widgets/contact_avatar.dart';
 
 class ContactDetailScreen extends ConsumerWidget {
   const ContactDetailScreen({super.key, required this.contactId});
@@ -55,24 +57,6 @@ class _ContactDetailViewState extends ConsumerState<_ContactDetailView> {
     _contact = widget.contact;
   }
 
-  static String _initials(String name) {
-    final parts = name.trim().split(' ');
-    if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    if (parts[0].isNotEmpty) return parts[0][0].toUpperCase();
-    return '?';
-  }
-
-  static Color _avatarColor(String name) {
-    final colors = [
-      Colors.indigo.shade400,
-      Colors.teal.shade400,
-      Colors.purple.shade400,
-      Colors.orange.shade400,
-      Colors.pink.shade400,
-    ];
-    return colors[name.hashCode.abs() % colors.length];
-  }
-
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -82,6 +66,8 @@ class _ContactDetailViewState extends ConsumerState<_ContactDetailView> {
     final displayName = peer?.displayName ?? '—';
     final myNotes = _contact.myNotes(myId);
     final connectedSince = _contact.updatedAt;
+    final isRequester = _contact.requesterId == myId;
+    final isPending = _contact.status == ContactStatus.pending;
 
     return Scaffold(
       appBar: AppBar(
@@ -97,11 +83,19 @@ class _ContactDetailViewState extends ConsumerState<_ContactDetailView> {
               if (value == 'notes') _editNotes(context, myId);
               if (value == 'remove') _confirmRemove(context);
               if (value == 'block') _confirmBlock(context);
+              if (value == 'cancel') _confirmCancel(context);
             },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'notes', child: Text('Update Notes')),
-              PopupMenuItem(value: 'remove', child: Text('Remove Contact')),
-              PopupMenuItem(value: 'block', child: Text('Block')),
+            itemBuilder: (_) => [
+              if (_contact.status == ContactStatus.accepted) ...[
+                const PopupMenuItem(value: 'notes', child: Text('Update Notes')),
+                const PopupMenuItem(value: 'remove', child: Text('Remove Contact')),
+                const PopupMenuItem(value: 'block', child: Text('Block')),
+              ],
+              if (isPending && isRequester)
+                const PopupMenuItem(value: 'cancel', child: Text('Cancel Request')),
+              if (isPending && !isRequester) ...[
+                const PopupMenuItem(value: 'block', child: Text('Block')),
+              ],
             ],
           ),
         ],
@@ -115,14 +109,10 @@ class _ContactDetailViewState extends ConsumerState<_ContactDetailView> {
             Center(
               child: Column(
                 children: [
-                  CircleAvatar(
+                  ContactAvatar(
+                    displayName: displayName,
+                    photoUrl: peer?.photoUrl,
                     radius: 44,
-                    backgroundColor: _avatarColor(displayName),
-                    child: Text(
-                      _initials(displayName),
-                      style: tt.headlineSmall?.copyWith(
-                          color: Colors.white, fontWeight: FontWeight.bold),
-                    ),
                   ),
                   const SizedBox(height: 14),
                   Text(displayName,
@@ -137,16 +127,22 @@ class _ContactDetailViewState extends ConsumerState<_ContactDetailView> {
                     Text(peer!.displayCompany!,
                         style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
                   ],
+                  const SizedBox(height: 16),
+                  // ── Quick action row ──────────────────────────────────────
+                  _QuickActions(
+                    contactId: _contact.id,
+                    phone: peer?.displayPhone,
+                    email: peer?.displayEmail,
+                    showMessage: _contact.status == ContactStatus.accepted,
+                  ),
                 ],
               ),
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 24),
 
             // ── Card info ────────────────────────────────────────────────────
             if (peer?.card != null) ...[
               _InfoCard(peer: peer!),
-              const SizedBox(height: 20),
-              StartThreadButton(contactId: _contact.id),
             ] else ...[
               Container(
                 width: double.infinity,
@@ -170,25 +166,45 @@ class _ContactDetailViewState extends ConsumerState<_ContactDetailView> {
               ),
             ],
 
-            const SizedBox(height: 24),
-            const Divider(),
-            const SizedBox(height: 16),
+            if (_contact.status == ContactStatus.accepted) ...[
+              const SizedBox(height: 24),
+              const Divider(),
+              const SizedBox(height: 16),
 
-            // ── Notes ────────────────────────────────────────────────────────
-            _NotesSection(
-              notes: myNotes,
-              onEdit: () => _editNotes(context, myId),
-            ),
-
-            const SizedBox(height: 20),
-
-            // ── Connected since ───────────────────────────────────────────────
-            Center(
-              child: Text(
-                'Connected ${_timeAgo(connectedSince)}',
-                style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+              // ── Notes ─────────────────────────────────────────────────────
+              _NotesSection(
+                notes: myNotes,
+                onEdit: () => _editNotes(context, myId),
               ),
-            ),
+
+              const SizedBox(height: 20),
+
+              // ── Connected since ────────────────────────────────────────────
+              Center(
+                child: Text(
+                  'Connected ${_timeAgo(connectedSince)}',
+                  style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                ),
+              ),
+            ],
+
+            if (isPending) ...[
+              const SizedBox(height: 20),
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: cs.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    isRequester ? 'Request sent — awaiting response' : 'Pending your response',
+                    style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                  ),
+                ),
+              ),
+            ],
+
             const SizedBox(height: 40),
           ],
         ),
@@ -318,14 +334,141 @@ class _ContactDetailViewState extends ConsumerState<_ContactDetailView> {
     if (confirmed != true || !mounted) return;
     try {
       await ref.read(contactRepositoryProvider).block(_contact.id);
-      if (!mounted) return;
-      GoRouter.of(context).pop();
+      if (context.mounted) context.pop();
     } catch (e) {
-      if (!mounted) return;
-      messenger.showSnackBar(const SnackBar(content: Text('Failed to block.')));
+      if (mounted) {
+        messenger.showSnackBar(const SnackBar(content: Text('Failed to block.')));
+      }
+    }
+  }
+
+  Future<void> _confirmCancel(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final router = GoRouter.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cancel request?'),
+        content: const Text('Your connection request will be withdrawn.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Keep')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Cancel Request',
+                style: TextStyle(color: Theme.of(ctx).colorScheme.error)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final err =
+        await ref.read(sentRequestsProvider.notifier).cancel(_contact.id);
+    if (!mounted) return;
+    if (err != null) {
+      messenger.showSnackBar(SnackBar(content: Text(err)));
+    } else {
+      router.pop();
     }
   }
 }
+
+// ── Quick Actions Row ─────────────────────────────────────────────────────────
+
+class _QuickActions extends ConsumerStatefulWidget {
+  const _QuickActions({
+    required this.contactId,
+    this.phone,
+    this.email,
+    required this.showMessage,
+  });
+
+  final String contactId;
+  final String? phone;
+  final String? email;
+  final bool showMessage;
+
+  @override
+  ConsumerState<_QuickActions> createState() => _QuickActionsState();
+}
+
+class _QuickActionsState extends ConsumerState<_QuickActions> {
+  Future<void> _launch(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    final actions = <_QuickAction>[
+      if (widget.phone != null)
+        _QuickAction(
+          icon: Icons.phone_outlined,
+          label: 'Call',
+          onTap: () => _launch('tel:${widget.phone}'),
+        ),
+      if (widget.email != null)
+        _QuickAction(
+          icon: Icons.email_outlined,
+          label: 'Email',
+          onTap: () => _launch('mailto:${widget.email}'),
+        ),
+      if (widget.showMessage)
+        _QuickAction(
+          icon: Icons.chat_bubble_outline,
+          label: 'Message',
+          widget: StartThreadButton(contactId: widget.contactId, compact: true),
+        ),
+    ];
+
+    if (actions.isEmpty) return const SizedBox.shrink();
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: actions.map((a) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Column(
+            children: [
+              a.widget ??
+                  IconButton.outlined(
+                    onPressed: a.onTap,
+                    icon: Icon(a.icon, size: 22),
+                    style: IconButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side: BorderSide(color: cs.outlineVariant),
+                    ),
+                  ),
+              const SizedBox(height: 4),
+              Text(a.label, style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant)),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
+class _QuickAction {
+  const _QuickAction({
+    required this.icon,
+    required this.label,
+    this.onTap,
+    this.widget,
+  });
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+  final Widget? widget;
+}
+
+// ── Info Card ─────────────────────────────────────────────────────────────────
 
 class _InfoCard extends StatelessWidget {
   const _InfoCard({required this.peer});
@@ -334,7 +477,6 @@ class _InfoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
     final card = peer.card!;
 
     return Container(
@@ -346,14 +488,25 @@ class _InfoCard extends StatelessWidget {
       child: Column(
         children: [
           if (card.email != null)
-            _InfoRow(icon: Icons.email_outlined, text: card.email!, tt: tt, cs: cs),
+            _InfoRow(
+              icon: Icons.email_outlined,
+              text: card.email!,
+              onTap: () => launchUrl(Uri.parse('mailto:${card.email}')),
+            ),
           if (card.phone != null) ...[
             const SizedBox(height: 10),
-            _InfoRow(icon: Icons.phone_outlined, text: card.phone!, tt: tt, cs: cs),
+            _InfoRow(
+              icon: Icons.phone_outlined,
+              text: card.phone!,
+              onTap: () => launchUrl(Uri.parse('tel:${card.phone}')),
+            ),
           ],
           if (card.company != null) ...[
             const SizedBox(height: 10),
-            _InfoRow(icon: Icons.business_outlined, text: card.company!, tt: tt, cs: cs),
+            _InfoRow(
+              icon: Icons.business_outlined,
+              text: card.company!,
+            ),
           ],
         ],
       ),
@@ -365,28 +518,35 @@ class _InfoRow extends StatelessWidget {
   const _InfoRow({
     required this.icon,
     required this.text,
-    required this.tt,
-    required this.cs,
+    this.onTap,
   });
   final IconData icon;
   final String text;
-  final TextTheme tt;
-  final ColorScheme cs;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 18, color: AppColors.primary),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(text,
-              style: tt.bodyMedium, overflow: TextOverflow.ellipsis),
-        ),
-      ],
+    final tt = Theme.of(context).textTheme;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(6),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: AppColors.primary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(text, style: tt.bodyMedium, overflow: TextOverflow.ellipsis),
+          ),
+          if (onTap != null)
+            Icon(Icons.open_in_new, size: 14,
+                color: Theme.of(context).colorScheme.onSurfaceVariant),
+        ],
+      ),
     );
   }
 }
+
+// ── Notes Section ─────────────────────────────────────────────────────────────
 
 class _NotesSection extends StatelessWidget {
   const _NotesSection({required this.notes, required this.onEdit});

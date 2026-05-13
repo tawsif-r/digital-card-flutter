@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/contacts_provider.dart';
 import '../domain/contact_model.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/providers/session_provider.dart';
+import '../../../shared/widgets/contact_avatar.dart';
 
 class AddContactScreen extends ConsumerStatefulWidget {
   const AddContactScreen({super.key});
@@ -101,12 +103,15 @@ class _AddContactScreenState extends ConsumerState<AddContactScreen> {
               ),
               data: (state) {
                 if (state.isEmpty) {
-                  return _SearchHint(cs: cs, tt: tt);
+                  return _SentRequestsOrHint(cs: cs, tt: tt);
                 }
                 if (state.isLoading && state.results.isEmpty) {
                   return const Center(child: CircularProgressIndicator());
                 }
-                if (state.results.isEmpty) {
+                final visible = state.results
+                    .where((u) => u.relationStatus != ContactStatus.blocked)
+                    .toList();
+                if (visible.isEmpty) {
                   return Center(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -124,11 +129,10 @@ class _AddContactScreenState extends ConsumerState<AddContactScreen> {
                 return ListView.separated(
                   controller: _scrollController,
                   padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
-                  itemCount:
-                      state.results.length + (state.isLoading ? 1 : 0),
+                  itemCount: visible.length + (state.isLoading ? 1 : 0),
                   separatorBuilder: (_, __) => const SizedBox(height: 8),
                   itemBuilder: (context, i) {
-                    if (i == state.results.length) {
+                    if (i == visible.length) {
                       return const Center(
                         child: Padding(
                           padding: EdgeInsets.all(12),
@@ -136,13 +140,137 @@ class _AddContactScreenState extends ConsumerState<AddContactScreen> {
                         ),
                       );
                     }
-                    return _UserTile(user: state.results[i]);
+                    return _UserTile(user: visible[i]);
                   },
                 );
               },
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SentRequestsOrHint extends ConsumerWidget {
+  const _SentRequestsOrHint({required this.cs, required this.tt});
+  final ColorScheme cs;
+  final TextTheme tt;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sentAsync = ref.watch(sentRequestsProvider);
+    final myId = ref.watch(userSessionProvider) ?? '';
+    final sent = sentAsync.valueOrNull ?? [];
+
+    if (sent.isEmpty) {
+      return _SearchHint(cs: cs, tt: tt);
+    }
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Text('Pending Sent',
+              style: tt.labelLarge?.copyWith(color: cs.onSurfaceVariant)),
+        ),
+        ...sent.map((c) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _SentRequestTile(contact: c, myId: myId),
+            )),
+        const Divider(height: 24),
+        _SearchHint(cs: cs, tt: tt),
+      ],
+    );
+  }
+}
+
+class _SentRequestTile extends ConsumerStatefulWidget {
+  const _SentRequestTile({required this.contact, required this.myId});
+  final ContactModel contact;
+  final String myId;
+
+  @override
+  ConsumerState<_SentRequestTile> createState() => _SentRequestTileState();
+}
+
+class _SentRequestTileState extends ConsumerState<_SentRequestTile> {
+  bool _cancelling = false;
+
+  Future<void> _cancel() async {
+    setState(() => _cancelling = true);
+    final err = await ref
+        .read(sentRequestsProvider.notifier)
+        .cancel(widget.contact.id);
+    if (!mounted) return;
+    setState(() => _cancelling = false);
+    if (err != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final peer = widget.contact.peer(widget.myId);
+    final displayName = peer?.displayName ?? '—';
+
+    return Card(
+      margin: EdgeInsets.zero,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.5)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          children: [
+            ContactAvatar(
+              displayName: displayName,
+              photoUrl: peer?.photoUrl,
+              radius: 20,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(displayName,
+                      style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+                  Text(peer?.displayEmail ?? '',
+                      style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text('Pending',
+                  style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant)),
+            ),
+            const SizedBox(width: 4),
+            _cancelling
+                ? const SizedBox(
+                    width: 20, height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : IconButton(
+                    icon: const Icon(Icons.close, size: 18),
+                    onPressed: _cancel,
+                    tooltip: 'Cancel request',
+                    color: cs.onSurfaceVariant,
+                    visualDensity: VisualDensity.compact,
+                  ),
+          ],
+        ),
       ),
     );
   }
@@ -198,25 +326,6 @@ class _UserTile extends ConsumerStatefulWidget {
 class _UserTileState extends ConsumerState<_UserTile> {
   bool _busy = false;
 
-  static String _initials(String name) {
-    final parts = name.trim().split(' ');
-    if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    if (parts[0].isNotEmpty) return parts[0][0].toUpperCase();
-    return '?';
-  }
-
-  static Color _avatarColor(String name) {
-    final colors = [
-      Colors.indigo.shade400,
-      Colors.teal.shade400,
-      Colors.purple.shade400,
-      Colors.orange.shade400,
-      Colors.pink.shade400,
-      Colors.cyan.shade500,
-    ];
-    return colors[name.hashCode.abs() % colors.length];
-  }
-
   Future<void> _connect() async {
     setState(() => _busy = true);
     final err = await ref.read(userSearchProvider.notifier).sendRequest(widget.user.id);
@@ -234,7 +343,6 @@ class _UserTileState extends ConsumerState<_UserTile> {
     final tt = Theme.of(context).textTheme;
     final user = widget.user;
     final displayName = user.displayName;
-    final avatarColor = _avatarColor(displayName);
     final subtitle = [
       user.displayTitle,
       user.displayCompany,
@@ -251,14 +359,10 @@ class _UserTileState extends ConsumerState<_UserTile> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [
-            CircleAvatar(
+            ContactAvatar(
+              displayName: displayName,
+              photoUrl: user.card?.photoUrl,
               radius: 22,
-              backgroundColor: avatarColor,
-              child: Text(
-                _initials(displayName),
-                style: tt.labelLarge?.copyWith(
-                    color: Colors.white, fontWeight: FontWeight.bold),
-              ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -309,7 +413,7 @@ class _RelationButton extends StatelessWidget {
 
     if (busy) {
       return const SizedBox(
-        width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2));
+          width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2));
     }
 
     return switch (status) {
@@ -321,14 +425,15 @@ class _RelationButton extends StatelessWidget {
               tapTargetSize: MaterialTapTargetSize.shrinkWrap),
           child: const Text('Connect', style: TextStyle(fontSize: 13)),
         ),
-      ContactStatus.pending => OutlinedButton(
+      ContactStatus.pending => OutlinedButton.icon(
           onPressed: null,
+          icon: const Icon(Icons.schedule, size: 14),
+          label: const Text('Pending', style: TextStyle(fontSize: 13)),
           style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               minimumSize: Size.zero,
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               foregroundColor: cs.onSurfaceVariant),
-          child: const Text('Pending', style: TextStyle(fontSize: 13)),
         ),
       ContactStatus.accepted => OutlinedButton.icon(
           onPressed: null,
