@@ -14,6 +14,8 @@ class MessagingSocket {
   io.Socket? _socket;
   bool _disposed = false;
   int _authRetryCount = 0;
+  // Threads to (re-)join whenever socket connects or reconnects
+  final Set<String> _activeThreads = {};
 
   final _statusCtrl = StreamController<SocketStatus>.broadcast();
   final _messageNewCtrl = StreamController<MessageModel>.broadcast();
@@ -59,6 +61,10 @@ class MessagingSocket {
     socket.onConnect((_) {
       _authRetryCount = 0;
       _statusCtrl.add(SocketStatus.connected);
+      // (Re-)join every thread that was registered before or during connect
+      for (final threadId in _activeThreads) {
+        socket.emitWithAck('thread:join', {'threadId': threadId}, ack: (_) {});
+      }
     });
     socket.onDisconnect((_) => _statusCtrl.add(SocketStatus.disconnected));
     socket.onConnectError((err) async {
@@ -134,6 +140,7 @@ class MessagingSocket {
   }
 
   void disconnect() {
+    _activeThreads.clear();
     _socket?.disconnect();
     _socket?.dispose();
     _socket = null;
@@ -142,14 +149,16 @@ class MessagingSocket {
   }
 
   void joinThread(String threadId) {
-    _socket?.emitWithAck(
-      'thread:join',
-      {'threadId': threadId},
-      ack: (_) {},
-    );
+    _activeThreads.add(threadId);
+    final socket = _socket;
+    if (socket != null && socket.connected) {
+      socket.emitWithAck('thread:join', {'threadId': threadId}, ack: (_) {});
+    }
+    // If not yet connected, onConnect will flush _activeThreads
   }
 
   void leaveThread(String threadId) {
+    _activeThreads.remove(threadId);
     _socket?.emit('thread:leave', {'threadId': threadId});
   }
 

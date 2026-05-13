@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../providers/contacts_provider.dart';
+import '../domain/contact_model.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../shared/utils/validators.dart';
+import '../../../core/providers/session_provider.dart';
+import '../../../shared/widgets/contact_avatar.dart';
 
 class AddContactScreen extends ConsumerStatefulWidget {
   const AddContactScreen({super.key});
@@ -12,91 +14,199 @@ class AddContactScreen extends ConsumerStatefulWidget {
   ConsumerState<AddContactScreen> createState() => _AddContactScreenState();
 }
 
-class _AddContactScreenState extends ConsumerState<AddContactScreen>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tabController;
+class _AddContactScreenState extends ConsumerState<AddContactScreen> {
+  final _searchController = TextEditingController();
+  final _scrollController = ScrollController();
+  Timer? _debounce;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _scrollController.addListener(_onScroll);
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
+    _searchController.dispose();
+    _scrollController.dispose();
+    _debounce?.cancel();
     super.dispose();
+  }
+
+  void _onChanged(String q) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 400), () {
+      ref.read(userSearchProvider.notifier).search(q);
+    });
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 150) {
+      ref.read(userSearchProvider.notifier).loadMore();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final searchAsync = ref.watch(userSearchProvider);
+    final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Add Contact', style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(icon: Icon(Icons.qr_code_scanner, size: 18), text: 'Scan / Slug'),
-            Tab(icon: Icon(Icons.email_outlined, size: 18), text: 'By Email'),
-            Tab(icon: Icon(Icons.phone_outlined, size: 18), text: 'Phone Import'),
-          ],
+        title: Text('Find People',
+            style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Divider(height: 1, color: cs.outlineVariant),
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: const [
-          _SlugTab(),
-          _EmailTab(),
-          _PhoneImportTab(),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: TextField(
+              controller: _searchController,
+              onChanged: _onChanged,
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: 'Search by name, email…',
+                prefixIcon: const Icon(Icons.search, size: 20),
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, size: 18),
+                        onPressed: () {
+                          _searchController.clear();
+                          _onChanged('');
+                        },
+                      )
+                    : null,
+                isDense: true,
+                filled: true,
+                fillColor: cs.surfaceContainerHighest,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              ),
+            ),
+          ),
+          Expanded(
+            child: searchAsync.when(
+              loading: () => const SizedBox.shrink(),
+              error: (e, _) => Center(
+                child: Text('Search failed. Try again.',
+                    style: TextStyle(color: cs.onSurfaceVariant)),
+              ),
+              data: (state) {
+                if (state.isEmpty) {
+                  return _SentRequestsOrHint(cs: cs, tt: tt);
+                }
+                if (state.isLoading && state.results.isEmpty) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                final visible = state.results
+                    .where((u) => u.relationStatus != ContactStatus.blocked)
+                    .toList();
+                if (visible.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.search_off_rounded, size: 48,
+                            color: cs.onSurfaceVariant),
+                        const SizedBox(height: 12),
+                        Text('No users found for "${state.query}"',
+                            style: tt.bodyMedium
+                                ?.copyWith(color: cs.onSurfaceVariant)),
+                      ],
+                    ),
+                  );
+                }
+                return ListView.separated(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+                  itemCount: visible.length + (state.isLoading ? 1 : 0),
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  itemBuilder: (context, i) {
+                    if (i == visible.length) {
+                      return const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(12),
+                          child: CircularProgressIndicator(),
+                        ),
+                      );
+                    }
+                    return _UserTile(user: visible[i]);
+                  },
+                );
+              },
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-// ── Slug / QR Tab ────────────────────────────────────────────────────────────
-
-class _SlugTab extends ConsumerStatefulWidget {
-  const _SlugTab();
+class _SentRequestsOrHint extends ConsumerWidget {
+  const _SentRequestsOrHint({required this.cs, required this.tt});
+  final ColorScheme cs;
+  final TextTheme tt;
 
   @override
-  ConsumerState<_SlugTab> createState() => _SlugTabState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sentAsync = ref.watch(sentRequestsProvider);
+    final myId = ref.watch(userSessionProvider) ?? '';
+    final sent = sentAsync.valueOrNull ?? [];
+
+    if (sent.isEmpty) {
+      return _SearchHint(cs: cs, tt: tt);
+    }
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Text('Pending Sent',
+              style: tt.labelLarge?.copyWith(color: cs.onSurfaceVariant)),
+        ),
+        ...sent.map((c) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _SentRequestTile(contact: c, myId: myId),
+            )),
+        const Divider(height: 24),
+        _SearchHint(cs: cs, tt: tt),
+      ],
+    );
+  }
 }
 
-class _SlugTabState extends ConsumerState<_SlugTab> {
-  final _formKey = GlobalKey<FormState>();
-  final _slugController = TextEditingController();
-  final _notesController = TextEditingController();
-  bool _loading = false;
+class _SentRequestTile extends ConsumerStatefulWidget {
+  const _SentRequestTile({required this.contact, required this.myId});
+  final ContactModel contact;
+  final String myId;
 
   @override
-  void dispose() {
-    _slugController.dispose();
-    _notesController.dispose();
-    super.dispose();
-  }
+  ConsumerState<_SentRequestTile> createState() => _SentRequestTileState();
+}
 
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _loading = true);
+class _SentRequestTileState extends ConsumerState<_SentRequestTile> {
+  bool _cancelling = false;
 
-    final (contact, err) = await ref.read(contactsProvider.notifier).addBySlug(
-          _slugController.text.trim(),
-          notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
-        );
-
+  Future<void> _cancel() async {
+    setState(() => _cancelling = true);
+    final err = await ref
+        .read(sentRequestsProvider.notifier)
+        .cancel(widget.contact.id);
     if (!mounted) return;
-    setState(() => _loading = false);
-
+    setState(() => _cancelling = false);
     if (err != null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${contact!.displayName} added to contacts.')),
-      );
-      context.pop();
     }
   }
 
@@ -104,73 +214,61 @@ class _SlugTabState extends ConsumerState<_SlugTab> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final peer = widget.contact.peer(widget.myId);
+    final displayName = peer?.displayName ?? '—';
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return Card(
+      margin: EdgeInsets.zero,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.5)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
           children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: cs.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
+            ContactAvatar(
+              displayName: displayName,
+              photoUrl: peer?.photoUrl,
+              radius: 20,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.info_outline, size: 18, color: cs.onSurfaceVariant),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Enter the card slug shown on a digital card (e.g. john-a3f2) or scan a QR code to get the slug.',
+                  Text(displayName,
+                      style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+                  Text(peer?.displayEmail ?? '',
                       style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                    ),
-                  ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
                 ],
               ),
             ),
-            const SizedBox(height: 24),
-            TextFormField(
-              controller: _slugController,
-              decoration: const InputDecoration(
-                labelText: 'Card Slug',
-                hintText: 'e.g. john-a3f2',
-                prefixIcon: Icon(Icons.badge_outlined),
-                border: OutlineInputBorder(),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(20),
               ),
-              validator: (v) => Validators.required(v, field: 'Slug'),
-              textInputAction: TextInputAction.next,
+              child: Text('Pending',
+                  style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant)),
             ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _notesController,
-              decoration: const InputDecoration(
-                labelText: 'Notes (optional)',
-                hintText: 'e.g. Met at Dhaka Tech Summit',
-                prefixIcon: Icon(Icons.notes_outlined),
-                border: OutlineInputBorder(),
-              ),
-              maxLines: 2,
-              textInputAction: TextInputAction.done,
-              onFieldSubmitted: (_) => _submit(),
-            ),
-            const SizedBox(height: 32),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: _loading ? null : _submit,
-                icon: _loading
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Icon(Icons.person_add_outlined, size: 18),
-                label: const Text('Add Contact'),
-              ),
-            ),
+            const SizedBox(width: 4),
+            _cancelling
+                ? const SizedBox(
+                    width: 20, height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : IconButton(
+                    icon: const Icon(Icons.close, size: 18),
+                    onPressed: _cancel,
+                    tooltip: 'Cancel request',
+                    color: cs.onSurfaceVariant,
+                    visualDensity: VisualDensity.compact,
+                  ),
           ],
         ),
       ),
@@ -178,97 +276,37 @@ class _SlugTabState extends ConsumerState<_SlugTab> {
   }
 }
 
-// ── Email Tab ─────────────────────────────────────────────────────────────────
-
-class _EmailTab extends ConsumerStatefulWidget {
-  const _EmailTab();
-
-  @override
-  ConsumerState<_EmailTab> createState() => _EmailTabState();
-}
-
-class _EmailTabState extends ConsumerState<_EmailTab> {
-  final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
-  final _notesController = TextEditingController();
-  bool _loading = false;
-
-  @override
-  void dispose() {
-    _emailController.dispose();
-    _notesController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _loading = true);
-
-    final (contact, err) = await ref.read(contactsProvider.notifier).addByEmail(
-          _emailController.text.trim(),
-          notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
-        );
-
-    if (!mounted) return;
-    setState(() => _loading = false);
-
-    if (err != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${contact!.displayName} added to contacts.')),
-      );
-      context.pop();
-    }
-  }
+class _SearchHint extends StatelessWidget {
+  const _SearchHint({required this.cs, required this.tt});
+  final ColorScheme cs;
+  final TextTheme tt;
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Form(
-        key: _formKey,
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(40),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            TextFormField(
-              controller: _emailController,
-              decoration: const InputDecoration(
-                labelText: 'Email Address',
-                hintText: 'john@example.com',
-                prefixIcon: Icon(Icons.email_outlined),
-                border: OutlineInputBorder(),
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(18),
               ),
-              keyboardType: TextInputType.emailAddress,
-              validator: Validators.email,
-              textInputAction: TextInputAction.next,
+              child: Icon(Icons.person_search_outlined, size: 36,
+                  color: AppColors.primary.withValues(alpha: 0.6)),
             ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _notesController,
-              decoration: const InputDecoration(
-                labelText: 'Notes (optional)',
-                prefixIcon: Icon(Icons.notes_outlined),
-                border: OutlineInputBorder(),
-              ),
-              maxLines: 2,
-              textInputAction: TextInputAction.done,
-              onFieldSubmitted: (_) => _submit(),
-            ),
-            const SizedBox(height: 32),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: _loading ? null : _submit,
-                icon: _loading
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Icon(Icons.search_outlined, size: 18),
-                label: const Text('Find & Add'),
-              ),
+            const SizedBox(height: 20),
+            Text('Find people to connect with',
+                style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            Text(
+              'Search by name or email address.',
+              style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+              textAlign: TextAlign.center,
             ),
           ],
         ),
@@ -277,80 +315,25 @@ class _EmailTabState extends ConsumerState<_EmailTab> {
   }
 }
 
-// ── Phone Import Tab ──────────────────────────────────────────────────────────
-
-class _PhoneImportTab extends ConsumerStatefulWidget {
-  const _PhoneImportTab();
+class _UserTile extends ConsumerStatefulWidget {
+  const _UserTile({required this.user});
+  final UserSearchResult user;
 
   @override
-  ConsumerState<_PhoneImportTab> createState() => _PhoneImportTabState();
+  ConsumerState<_UserTile> createState() => _UserTileState();
 }
 
-class _PhoneImportTabState extends ConsumerState<_PhoneImportTab> {
-  final _controller = TextEditingController();
-  bool _loading = false;
-  _ImportResult? _result;
+class _UserTileState extends ConsumerState<_UserTile> {
+  bool _busy = false;
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  List<Map<String, String?>> _parseEntries(String raw) {
-    return raw
-        .split('\n')
-        .map((line) => line.trim())
-        .where((line) => line.isNotEmpty)
-        .map((line) {
-      final parts = line.split(',').map((p) => p.trim()).toList();
-      final name = parts.isNotEmpty ? parts[0] : null;
-      String? email;
-      String? phone;
-      for (final p in parts.skip(1)) {
-        if (p.contains('@')) {
-          email = p;
-        } else if (p.startsWith('+') || RegExp(r'^\d').hasMatch(p)) {
-          phone = p;
-        }
-      }
-      return {'name': name, 'email': email, 'phone': phone};
-    }).toList();
-  }
-
-  Future<void> _import() async {
-    final entries = _parseEntries(_controller.text);
-    if (entries.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No valid entries found.')),
-      );
-      return;
-    }
-    if (entries.length > 500) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Maximum 500 entries per import.')),
-      );
-      return;
-    }
-
-    setState(() {
-      _loading = true;
-      _result = null;
-    });
-
-    final (result, err) = await ref.read(contactsProvider.notifier).importFromPhone(entries);
-
+  Future<void> _connect() async {
+    setState(() => _busy = true);
+    final err = await ref.read(userSearchProvider.notifier).sendRequest(widget.user.id);
     if (!mounted) return;
-    setState(() => _loading = false);
-
+    setState(() => _busy = false);
     if (err != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
-    } else if (result != null) {
-      setState(() => _result = _ImportResult(
-            matched: result.matched.length,
-            notFound: result.notFound,
-            skipped: result.skippedDuplicates,
-          ));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(err)));
     }
   }
 
@@ -358,143 +341,111 @@ class _PhoneImportTabState extends ConsumerState<_PhoneImportTab> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final user = widget.user;
+    final displayName = user.displayName;
+    final subtitle = [
+      user.displayTitle,
+      user.displayCompany,
+    ].whereType<String>().join(' · ');
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: cs.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(8),
+    return Card(
+      margin: EdgeInsets.zero,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.5)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            ContactAvatar(
+              displayName: displayName,
+              photoUrl: user.card?.photoUrl,
+              radius: 22,
             ),
-            child: Text(
-              'One contact per line. Format:\nName, email@example.com\nName, +8801700000001\nName, email@example.com, +8801700000001',
-              style: tt.bodySmall?.copyWith(
-                color: cs.onSurfaceVariant,
-                fontFamily: 'monospace',
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(displayName,
+                      style: tt.bodyLarge?.copyWith(fontWeight: FontWeight.w600)),
+                  if (subtitle.isNotEmpty)
+                    Text(subtitle,
+                        style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+                  Text(user.email,
+                      style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                ],
               ),
             ),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _controller,
-            maxLines: 10,
-            keyboardType: TextInputType.multiline,
-            decoration: const InputDecoration(
-              hintText: 'Alice, alice@example.com\nBob, +8801700000001',
-              border: OutlineInputBorder(),
-              alignLabelWithHint: true,
+            const SizedBox(width: 8),
+            _RelationButton(
+              status: user.relationStatus,
+              busy: _busy,
+              onConnect: _connect,
             ),
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: _loading ? null : _import,
-              icon: _loading
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                    )
-                  : const Icon(Icons.upload_outlined, size: 18),
-              label: const Text('Import Contacts'),
-            ),
-          ),
-          if (_result != null) ...[
-            const SizedBox(height: 24),
-            _ImportResultCard(result: _result!),
           ],
-        ],
+        ),
       ),
     );
   }
 }
 
-class _ImportResult {
-  const _ImportResult({
-    required this.matched,
-    required this.notFound,
-    required this.skipped,
+class _RelationButton extends StatelessWidget {
+  const _RelationButton({
+    required this.status,
+    required this.busy,
+    required this.onConnect,
   });
-  final int matched;
-  final int notFound;
-  final int skipped;
-}
 
-class _ImportResultCard extends StatelessWidget {
-  const _ImportResultCard({required this.result});
-
-  final _ImportResult result;
+  final ContactStatus? status;
+  final bool busy;
+  final VoidCallback onConnect;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Import Results', style: tt.labelLarge),
-          const SizedBox(height: 12),
-          _ResultRow(
-            icon: Icons.check_circle_outline,
-            color: AppColors.success,
-            label: 'Matched & added',
-            count: result.matched,
-          ),
-          const SizedBox(height: 6),
-          _ResultRow(
-            icon: Icons.skip_next_outlined,
-            color: cs.onSurfaceVariant,
-            label: 'Already in contacts',
-            count: result.skipped,
-          ),
-          const SizedBox(height: 6),
-          _ResultRow(
-            icon: Icons.person_off_outlined,
-            color: cs.error,
-            label: 'Not found on platform',
-            count: result.notFound,
-          ),
-        ],
-      ),
-    );
-  }
-}
+    if (busy) {
+      return const SizedBox(
+          width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2));
+    }
 
-class _ResultRow extends StatelessWidget {
-  const _ResultRow({
-    required this.icon,
-    required this.color,
-    required this.label,
-    required this.count,
-  });
-
-  final IconData icon;
-  final Color color;
-  final String label;
-  final int count;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 16, color: color),
-        const SizedBox(width: 8),
-        Text(label, style: Theme.of(context).textTheme.bodySmall),
-        const Spacer(),
-        Text('$count', style: Theme.of(context).textTheme.labelLarge?.copyWith(color: color)),
-      ],
-    );
+    return switch (status) {
+      null => FilledButton(
+          onPressed: onConnect,
+          style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+          child: const Text('Connect', style: TextStyle(fontSize: 13)),
+        ),
+      ContactStatus.pending => OutlinedButton.icon(
+          onPressed: null,
+          icon: const Icon(Icons.schedule, size: 14),
+          label: const Text('Pending', style: TextStyle(fontSize: 13)),
+          style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              foregroundColor: cs.onSurfaceVariant),
+        ),
+      ContactStatus.accepted => OutlinedButton.icon(
+          onPressed: null,
+          icon: const Icon(Icons.check, size: 14),
+          label: const Text('Connected', style: TextStyle(fontSize: 13)),
+          style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              foregroundColor: Colors.green.shade600),
+        ),
+      _ => const SizedBox.shrink(),
+    };
   }
 }

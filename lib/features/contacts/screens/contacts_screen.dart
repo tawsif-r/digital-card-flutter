@@ -7,6 +7,7 @@ import '../domain/contact_model.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/loading_shimmer.dart';
+import '../../../shared/widgets/contact_avatar.dart';
 import '../../auth/domain/user_model.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../../core/providers/session_provider.dart';
@@ -57,20 +58,37 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
     final contactsAsync = ref.watch(contactsProvider);
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final isEmployee =
-        ref.watch(authProvider).user?.role == UserRole.employee;
-    final addPath =
-        isEmployee ? Routes.employeeContactAdd : Routes.contactAdd;
+    final isEmployee = ref.watch(authProvider).user?.role == UserRole.employee;
+    final addPath = isEmployee ? Routes.employeeContactAdd : Routes.contactAdd;
+    final pendingPath = isEmployee ? Routes.employeeContactPending : Routes.contactPending;
     String detailPath(String id) => isEmployee
         ? Routes.employeeContactDetailPath(id)
         : Routes.contactDetailPath(id);
 
+    final pendingCount = contactsAsync.valueOrNull?.pendingCount ?? 0;
+    final sentCount = contactsAsync.valueOrNull?.sentCount ?? 0;
+
     return Scaffold(
       appBar: AppBar(
         title: Text('Contacts', style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        actions: [
+          _BadgeIconButton(
+            tooltip: 'Sent Requests',
+            icon: Icons.outbox_outlined,
+            count: sentCount,
+            onTap: () => context.push(pendingPath),
+          ),
+          _BadgeIconButton(
+            tooltip: 'Connection Requests',
+            icon: Icons.notifications_outlined,
+            count: pendingCount,
+            onTap: () => context.push(pendingPath),
+          ),
+          const SizedBox(width: 4),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Divider(height: 1, color: cs.outline),
+          child: Divider(height: 1, color: cs.outlineVariant),
         ),
       ),
       body: Column(
@@ -78,10 +96,6 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
           _SearchBar(
             controller: _searchController,
             onChanged: _onSearchChanged,
-          ),
-          _SourceFilterRow(
-            selected: contactsAsync.valueOrNull?.sourceFilter,
-            onChanged: (s) => ref.read(contactsProvider.notifier).setSourceFilter(s),
           ),
           Expanded(
             child: RefreshIndicator(
@@ -122,10 +136,55 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => context.push(addPath),
-        icon: const Icon(Icons.person_add_outlined, size: 20),
-        label: const Text('Add Contact'),
+        icon: const Icon(Icons.person_search_outlined, size: 20),
+        label: const Text('Find People'),
         elevation: 2,
       ),
+    );
+  }
+}
+
+class _BadgeIconButton extends StatelessWidget {
+  const _BadgeIconButton({
+    required this.tooltip,
+    required this.icon,
+    required this.count,
+    required this.onTap,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final int count;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        IconButton(tooltip: tooltip, icon: Icon(icon), onPressed: onTap),
+        if (count > 0)
+          Positioned(
+            right: 6,
+            top: 6,
+            child: Container(
+              padding: const EdgeInsets.all(3),
+              decoration: BoxDecoration(color: cs.error, shape: BoxShape.circle),
+              constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+              child: Text(
+                count > 9 ? '9+' : '$count',
+                style: TextStyle(
+                  color: cs.onError,
+                  fontSize: 9,
+                  fontWeight: FontWeight.bold,
+                  height: 1,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -140,12 +199,12 @@ class _SearchBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       child: TextField(
         controller: controller,
         onChanged: onChanged,
         decoration: InputDecoration(
-          hintText: 'Search by name, email, or phone…',
+          hintText: 'Search contacts…',
           prefixIcon: const Icon(Icons.search, size: 20),
           suffixIcon: controller.text.isNotEmpty
               ? IconButton(
@@ -170,43 +229,6 @@ class _SearchBar extends StatelessWidget {
   }
 }
 
-class _SourceFilterRow extends StatelessWidget {
-  const _SourceFilterRow({required this.selected, required this.onChanged});
-
-  final String? selected;
-  final ValueChanged<String?> onChanged;
-
-  static const _filters = [
-    (label: 'All', value: null),
-    (label: 'Scan', value: 'scan'),
-    (label: 'Email', value: 'email_import'),
-    (label: 'Phone', value: 'phone_import'),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 44,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-        itemCount: _filters.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (context, i) {
-          final f = _filters[i];
-          final active = selected == f.value;
-          return FilterChip(
-            label: Text(f.label),
-            selected: active,
-            onSelected: (_) => onChanged(f.value),
-            visualDensity: VisualDensity.compact,
-          );
-        },
-      ),
-    );
-  }
-}
-
 class _ContactList extends ConsumerWidget {
   const _ContactList({
     required this.state,
@@ -223,7 +245,7 @@ class _ContactList extends ConsumerWidget {
     return ListView.separated(
       controller: scrollController,
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
       itemCount: state.contacts.length + (state.isLoadingMore ? 1 : 0),
       separatorBuilder: (_, __) => const SizedBox(height: 8),
       itemBuilder: (context, i) {
@@ -254,66 +276,60 @@ class _ContactTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final initials = _initials(contact.displayName);
-    final selfId = ref.watch(userSessionProvider);
-    final isSelf = contact.contactUserId != null &&
-        contact.contactUserId == selfId;
-    final hasAccount = contact.contactUserId != null;
-    final showMessageIcon = !isSelf;
+    final myId = ref.watch(userSessionProvider) ?? '';
+    final peer = contact.peer(myId);
+    final displayName = peer?.displayName ?? '—';
 
     return Card(
       margin: EdgeInsets.zero,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.5)),
+      ),
       child: ListTile(
         onTap: () => context.push(detailPathFor(contact.id)),
-        leading: CircleAvatar(
-          backgroundColor: AppColors.primary.withValues(alpha: 0.15),
-          child: Text(
-            initials,
-            style: tt.labelLarge?.copyWith(color: AppColors.primary),
-          ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        leading: ContactAvatar(
+          displayName: displayName,
+          photoUrl: peer?.photoUrl,
+          radius: 22,
         ),
-        title: Text(contact.displayName, style: tt.bodyLarge?.copyWith(fontWeight: FontWeight.w600)),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (contact.displayCompany != null)
-              Text(contact.displayCompany!, style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
-            if (contact.displayEmail != null)
-              Text(contact.displayEmail!, style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
-          ],
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (showMessageIcon)
-              _MessageIconButton(
-                contactId: contact.id,
-                hasAccount: hasAccount,
-              ),
-            _SourceBadge(source: contact.source),
-          ],
-        ),
-        isThreeLine: contact.displayCompany != null && contact.displayEmail != null,
+        title: Text(displayName, style: tt.bodyLarge?.copyWith(fontWeight: FontWeight.w600)),
+        subtitle: _buildSubtitle(context, peer),
+        trailing: _MessageIconButton(contactId: contact.id),
       ),
     );
   }
 
-  String _initials(String name) {
-    final parts = name.trim().split(' ');
-    if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    if (parts[0].isNotEmpty) return parts[0][0].toUpperCase();
-    return '?';
+  Widget? _buildSubtitle(BuildContext context, ContactPeer? peer) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final parts = <String>[
+      if (peer?.displayTitle != null) peer!.displayTitle!,
+      if (peer?.displayCompany != null) peer!.displayCompany!,
+    ];
+    if (parts.isEmpty) {
+      final email = peer?.displayEmail;
+      return email != null
+          ? Text(email,
+              style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis)
+          : null;
+    }
+    return Text(
+      parts.join(' · '),
+      style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    );
   }
 }
 
 class _MessageIconButton extends ConsumerStatefulWidget {
-  const _MessageIconButton({
-    required this.contactId,
-    required this.hasAccount,
-  });
-
+  const _MessageIconButton({required this.contactId});
   final String contactId;
-  final bool hasAccount;
 
   @override
   ConsumerState<_MessageIconButton> createState() => _MessageIconButtonState();
@@ -321,16 +337,6 @@ class _MessageIconButton extends ConsumerStatefulWidget {
 
 class _MessageIconButtonState extends ConsumerState<_MessageIconButton> {
   bool _busy = false;
-
-  void _showInviteHint() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'This contact is not on Digital Card yet. Open the contact and tap "Share My Card" to invite them.',
-        ),
-      ),
-    );
-  }
 
   Future<void> _open() async {
     if (_busy) return;
@@ -341,13 +347,11 @@ class _MessageIconButtonState extends ConsumerState<_MessageIconButton> {
           .createOrGetThread(contactId: widget.contactId);
       if (!mounted) return;
       if (err != null) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(err)));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
         return;
       }
       if (threadId == null) return;
-      final isEmployee =
-          ref.read(authProvider).user?.role == UserRole.employee;
+      final isEmployee = ref.read(authProvider).user?.role == UserRole.employee;
       if (!mounted) return;
       context.push(isEmployee
           ? Routes.employeeThreadDetailPath(threadId)
@@ -359,55 +363,20 @@ class _MessageIconButtonState extends ConsumerState<_MessageIconButton> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final iconColor =
-        widget.hasAccount ? AppColors.primary : cs.onSurfaceVariant;
     return IconButton(
-      tooltip: widget.hasAccount ? 'Message' : 'Not on Digital Card — invite',
-      onPressed: _busy
-          ? null
-          : (widget.hasAccount ? _open : _showInviteHint),
+      tooltip: 'Message',
+      onPressed: _busy ? null : _open,
       icon: _busy
           ? const SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : Icon(
-              widget.hasAccount
-                  ? Icons.chat_bubble_outline
-                  : Icons.person_add_alt_1_outlined,
-              size: 20,
-              color: iconColor,
-            ),
+              width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+          : const Icon(Icons.chat_bubble_outline, size: 20),
       visualDensity: VisualDensity.compact,
-    );
-  }
-}
-
-class _SourceBadge extends StatelessWidget {
-  const _SourceBadge({required this.source});
-
-  final String source;
-
-  @override
-  Widget build(BuildContext context) {
-    final (label, icon) = switch (source) {
-      'scan' => ('Scan', Icons.qr_code_2),
-      'email_import' => ('Email', Icons.email_outlined),
-      'phone_import' => ('Phone', Icons.phone_outlined),
-      _ => ('?', Icons.help_outline),
-    };
-    return Tooltip(
-      message: label,
-      child: Icon(icon, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
     );
   }
 }
 
 class _EmptyState extends StatelessWidget {
   const _EmptyState({required this.onAdd});
-
   final VoidCallback onAdd;
 
   @override
@@ -427,23 +396,24 @@ class _EmptyState extends StatelessWidget {
                 color: AppColors.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: Icon(Icons.contacts_outlined, size: 40, color: AppColors.primary.withValues(alpha: 0.7)),
+              child: Icon(Icons.people_outline_rounded, size: 40,
+                  color: AppColors.primary.withValues(alpha: 0.7)),
             ),
             const SizedBox(height: 24),
-            Text('No contacts yet', style: tt.titleLarge),
+            Text('No connections yet', style: tt.titleLarge),
             const SizedBox(height: 8),
             Text(
-              'Add contacts by scanning a QR code, email lookup, or phone book import.',
+              'Find and connect with people. Tap "Find People" to search by name or email.',
               style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 32),
             SizedBox(
               width: double.infinity,
-              child: ElevatedButton.icon(
+              child: FilledButton.icon(
                 onPressed: onAdd,
-                icon: const Icon(Icons.person_add_outlined, size: 18),
-                label: const Text('Add Your First Contact'),
+                icon: const Icon(Icons.person_search_outlined, size: 18),
+                label: const Text('Find People'),
               ),
             ),
           ],
@@ -455,7 +425,6 @@ class _EmptyState extends StatelessWidget {
 
 class _ErrorView extends StatelessWidget {
   const _ErrorView({required this.onRetry});
-
   final VoidCallback onRetry;
 
   @override

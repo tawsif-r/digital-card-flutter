@@ -8,9 +8,10 @@ import '../../auth/providers/auth_provider.dart';
 import '../providers/threads_provider.dart';
 
 class StartThreadButton extends ConsumerStatefulWidget {
-  const StartThreadButton({super.key, required this.contactId});
+  const StartThreadButton({super.key, required this.contactId, this.compact = false});
 
   final String contactId;
+  final bool compact;
 
   @override
   ConsumerState<StartThreadButton> createState() => _StartThreadButtonState();
@@ -44,6 +45,23 @@ class _StartThreadButtonState extends ConsumerState<StartThreadButton> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    if (widget.compact) {
+      return IconButton.outlined(
+        onPressed: _busy ? null : _start,
+        icon: _busy
+            ? const SizedBox(
+                width: 18, height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2))
+            : const Icon(Icons.chat_bubble_outline, size: 22),
+        style: IconButton.styleFrom(
+          foregroundColor: Theme.of(context).colorScheme.primary,
+          side: BorderSide(color: cs.outlineVariant),
+        ),
+      );
+    }
+
     return FilledButton.icon(
       onPressed: _busy ? null : _start,
       icon: _busy

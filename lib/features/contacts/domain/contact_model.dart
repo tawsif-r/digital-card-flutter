@@ -1,85 +1,166 @@
-import '../../cards/domain/card_model.dart';
+enum ContactStatus { pending, accepted, blocked }
 
-class ContactModel {
-  const ContactModel({
+ContactStatus _statusFromString(String s) => switch (s) {
+      'accepted' => ContactStatus.accepted,
+      'blocked' => ContactStatus.blocked,
+      _ => ContactStatus.pending,
+    };
+
+class ContactPeerCard {
+  const ContactPeerCard({
+    required this.name,
+    this.title,
+    this.company,
+    this.phone,
+    this.email,
+    this.photoUrl,
+  });
+
+  final String name;
+  final String? title;
+  final String? company;
+  final String? phone;
+  final String? email;
+  final String? photoUrl;
+
+  factory ContactPeerCard.fromJson(Map<String, dynamic> json) => ContactPeerCard(
+        name: json['name'] as String? ?? '',
+        title: json['title'] as String?,
+        company: json['company'] as String?,
+        phone: json['phone'] as String?,
+        email: json['email'] as String?,
+        photoUrl: json['photo_url'] as String?,
+      );
+}
+
+class ContactPeer {
+  const ContactPeer({
     required this.id,
-    required this.ownerId,
-    required this.source,
-    required this.createdAt,
-    required this.updatedAt,
-    this.cardId,
-    this.cardSlug,
-    this.contactUserId,
-    this.notes,
+    required this.email,
+    this.name,
     this.card,
   });
 
   final String id;
-  final String ownerId;
-  final String? cardId;
-  final String? cardSlug;
-  final String? contactUserId;
-  final String source; // 'scan' | 'phone_import' | 'email_import'
+  final String email;
+  final String? name;
+  final ContactPeerCard? card;
+
+  String get displayName => card?.name ?? name ?? email;
+  String? get displayTitle => card?.title;
+  String? get displayCompany => card?.company;
+  String? get displayPhone => card?.phone;
+  String? get displayEmail => card?.email ?? email;
+  String? get photoUrl => card?.photoUrl;
+
+  factory ContactPeer.fromJson(Map<String, dynamic> json) => ContactPeer(
+        id: json['id'] as String,
+        email: json['email'] as String,
+        name: json['name'] as String?,
+        card: json['card'] != null
+            ? ContactPeerCard.fromJson(json['card'] as Map<String, dynamic>)
+            : null,
+      );
+}
+
+class ContactModel {
+  const ContactModel({
+    required this.id,
+    required this.requesterId,
+    required this.addresseeId,
+    required this.status,
+    required this.createdAt,
+    required this.updatedAt,
+    this.notes,
+    this.addresseeNotes,
+    this.peerData,
+  });
+
+  final String id;
+  final String requesterId;
+  final String addresseeId;
+  final ContactStatus status;
   final String? notes;
-  final CardModel? card;
+  final String? addresseeNotes;
+  // Backend enriches and returns the other person as `peer` (already resolved server-side)
+  final ContactPeer? peerData;
   final DateTime createdAt;
   final DateTime updatedAt;
 
-  String get displayName => card?.data.name ?? cardSlug ?? 'Unknown';
-  String? get displayEmail => card?.data.email;
-  String? get displayPhone => card?.data.phone;
-  String? get displayCompany => card?.data.company;
+  // Backend already resolved peer relative to current user; fall back gracefully
+  ContactPeer? peer(String myUserId) => peerData;
+
+  String? myNotes(String myUserId) =>
+      requesterId == myUserId ? notes : addresseeNotes;
+
+  ContactModel copyWith({
+    ContactStatus? status,
+    String? notes,
+    String? addresseeNotes,
+  }) =>
+      ContactModel(
+        id: id,
+        requesterId: requesterId,
+        addresseeId: addresseeId,
+        status: status ?? this.status,
+        notes: notes ?? this.notes,
+        addresseeNotes: addresseeNotes ?? this.addresseeNotes,
+        peerData: peerData,
+        createdAt: createdAt,
+        updatedAt: updatedAt,
+      );
 
   factory ContactModel.fromJson(Map<String, dynamic> json) => ContactModel(
         id: json['id'] as String,
-        ownerId: json['owner_id'] as String,
-        cardId: json['card_id'] as String?,
-        cardSlug: json['card_slug'] as String?,
-        contactUserId: json['contact_user_id'] as String?,
-        source: json['source'] as String,
+        requesterId: json['requester_id'] as String,
+        addresseeId: json['addressee_id'] as String,
+        status: _statusFromString(json['status'] as String? ?? 'pending'),
         notes: json['notes'] as String?,
-        card: json['card'] != null
-            ? CardModel.fromJson(json['card'] as Map<String, dynamic>)
+        addresseeNotes: json['addressee_notes'] as String?,
+        peerData: json['peer'] != null
+            ? ContactPeer.fromJson(json['peer'] as Map<String, dynamic>)
             : null,
         createdAt: DateTime.parse(json['created_at'] as String),
         updatedAt: DateTime.parse(json['updated_at'] as String),
       );
-
-  ContactModel copyWith({
-    String? notes,
-    CardModel? card,
-  }) =>
-      ContactModel(
-        id: id,
-        ownerId: ownerId,
-        cardId: cardId,
-        cardSlug: cardSlug,
-        contactUserId: contactUserId,
-        source: source,
-        notes: notes ?? this.notes,
-        card: card ?? this.card,
-        createdAt: createdAt,
-        updatedAt: updatedAt,
-      );
 }
 
-class PhoneImportResult {
-  const PhoneImportResult({
-    required this.matched,
-    required this.notFound,
-    required this.skippedDuplicates,
+class UserSearchResult {
+  const UserSearchResult({
+    required this.id,
+    required this.email,
+    this.name,
+    this.card,
+    this.relationStatus,
   });
 
-  final List<ContactModel> matched;
-  final int notFound;
-  final int skippedDuplicates;
+  final String id;
+  final String email;
+  final String? name;
+  final ContactPeerCard? card;
+  final ContactStatus? relationStatus;
 
-  factory PhoneImportResult.fromJson(Map<String, dynamic> json) =>
-      PhoneImportResult(
-        matched: (json['matched'] as List)
-            .map((e) => ContactModel.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        notFound: json['not_found'] as int,
-        skippedDuplicates: json['skipped_duplicates'] as int,
+  String get displayName => card?.name ?? name ?? email;
+  String? get displayTitle => card?.title;
+  String? get displayCompany => card?.company;
+
+  UserSearchResult withStatus(ContactStatus status) => UserSearchResult(
+        id: id,
+        email: email,
+        name: name,
+        card: card,
+        relationStatus: status,
+      );
+
+  factory UserSearchResult.fromJson(Map<String, dynamic> json) => UserSearchResult(
+        id: json['id'] as String,
+        email: json['email'] as String,
+        name: json['name'] as String?,
+        card: json['card'] != null
+            ? ContactPeerCard.fromJson(json['card'] as Map<String, dynamic>)
+            : null,
+        relationStatus: json['relation_status'] != null
+            ? _statusFromString(json['relation_status'] as String)
+            : null,
       );
 }

@@ -1,18 +1,20 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class AppConstants {
   AppConstants._();
 
-  // Optional override:
-  // flutter run --dart-define=API_BASE_URL=http://192.168.x.x:3000
-  static const String _envBaseUrl = String.fromEnvironment('API_BASE_URL');
-
   static String get baseUrl {
-    if (_envBaseUrl.isNotEmpty) return _envBaseUrl;
-    if (kIsWeb) return 'http://192.168.3.35:3000';
+    final dotenvUrl = dotenv.env['API_BASE_URL'];
+    if (dotenvUrl != null && dotenvUrl.isNotEmpty) return dotenvUrl;
+
+    final dartDefineUrl = String.fromEnvironment('API_BASE_URL');
+    if (dartDefineUrl.isNotEmpty) return dartDefineUrl;
+
+    if (kIsWeb) return 'API_BASE_URL';
     return switch (defaultTargetPlatform) {
-      TargetPlatform.android => 'http://10.0.2.2:3000',
-      _ => 'http://192.168.3.35:3000',
+      TargetPlatform.android => 'http://10.0.2.2:3001',
+      _ => 'API_BASE_URL',
     };
   }
 
@@ -26,3 +28,5 @@ class StorageKeys {
   static const String refreshToken = 'refresh_token';
   static const String userId = 'user_id';
 }
+
+//http://192.168.3.35:3001
