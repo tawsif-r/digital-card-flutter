@@ -22,6 +22,7 @@ class Routes {
   static const String networking = '/networking';
   static const String me = '/me';
   static const String meetings = '/meetings';
+  static const String calendar = '/calendar';
   static const String todos = '/todos';
   static const String mail = '/mail';
   static const String settings = '/settings';
@@ -33,6 +34,7 @@ class Routes {
   static const String employeeSettings = '/employee/settings';
   static const String employeeMe = '/employee/me';
   static const String employeeMeetings = '/employee/meetings';
+  static const String employeeCalendar = '/employee/calendar';
   static const String employeeTodos = '/employee/todos';
   static const String employeeContacts = '/employee/contacts';
   static const String employeeContactAdd = '/employee/contacts/add';

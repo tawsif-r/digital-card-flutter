@@ -108,6 +108,7 @@ class _SidebarContent extends ConsumerWidget {
                 _SectionLabel('Personal'),
                 _NavItem(label: 'Me', icon: Icons.person_outline, route: Routes.employeeMe, shell: navigationShell),
                 _NavItem(label: 'Meetings', icon: Icons.calendar_today_outlined, route: Routes.employeeMeetings, shell: navigationShell),
+                _NavItem(label: 'Calendar', icon: Icons.calendar_month_outlined, route: Routes.employeeCalendar, shell: navigationShell),
                 _NavItem(label: 'Todos', icon: Icons.check_box_outlined, route: Routes.employeeTodos, shell: navigationShell),
                 _SectionLabel('Network'),
                 _NavItem(label: 'Contacts', icon: Icons.contacts_outlined, route: Routes.employeeContacts, shell: navigationShell),
