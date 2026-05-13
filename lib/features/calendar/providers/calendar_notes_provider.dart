@@ -1,36 +1,66 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../data/calendar_notes_repository.dart';
+import '../data/calendar_note_repository.dart';
+import '../domain/calendar_note_model.dart';
+import '../../../core/di/providers.dart';
 import '../../../core/providers/session_provider.dart';
+
+final calendarNoteRepositoryProvider = Provider<CalendarNoteRepository>((ref) {
+  return CalendarNoteRepository(ref.watch(dioProvider));
+});
 
 final calendarNotesProvider =
     AsyncNotifierProvider<CalendarNotesNotifier, Map<String, String>>(
         CalendarNotesNotifier.new);
 
 class CalendarNotesNotifier extends AsyncNotifier<Map<String, String>> {
-  late final CalendarNotesRepository _repo;
+  // dateKey → db id, kept in sync with state
+  final Map<String, String> _noteIds = {};
 
   @override
   Future<Map<String, String>> build() async {
     final userId = ref.watch(userSessionProvider);
     if (userId == null) return {};
-    final prefs = await SharedPreferences.getInstance();
-    _repo = CalendarNotesRepository(prefs, userId: userId);
-    return _repo.loadNotes();
+    final notes = await ref.watch(calendarNoteRepositoryProvider).getAll();
+    _noteIds
+      ..clear()
+      ..addEntries(notes.map((n) => MapEntry(n.date, n.id)));
+    return {for (final n in notes) n.date: n.content};
   }
 
   Future<void> upsertNote(String dateKey, String note) async {
+    final repo = ref.read(calendarNoteRepositoryProvider);
     final current = Map<String, String>.from(state.valueOrNull ?? {});
-    current[dateKey] = note;
+    final existingId = _noteIds[dateKey];
+
+    final CalendarNoteModel saved;
+    if (existingId != null) {
+      saved = await repo.update(existingId, note);
+    } else {
+      saved = await repo.create(dateKey, note);
+    }
+
+    _noteIds[saved.date] = saved.id;
+    current[dateKey] = saved.content;
     state = AsyncData(current);
-    await _repo.saveNotes(current);
   }
 
   Future<void> removeNote(String dateKey) async {
-    final current = Map<String, String>.from(state.valueOrNull ?? {});
-    if (!current.containsKey(dateKey)) return;
-    current.remove(dateKey);
-    state = AsyncData(current);
-    await _repo.saveNotes(current);
+    final id = _noteIds[dateKey];
+    if (id == null) return;
+
+    final repo = ref.read(calendarNoteRepositoryProvider);
+    final previous = Map<String, String>.from(state.valueOrNull ?? {});
+
+    // Optimistic remove
+    _noteIds.remove(dateKey);
+    state = AsyncData(Map<String, String>.from(previous)..remove(dateKey));
+
+    try {
+      await repo.delete(id);
+    } catch (_) {
+      // Rollback on failure
+      _noteIds[dateKey] = id;
+      state = AsyncData(previous);
+    }
   }
 }
