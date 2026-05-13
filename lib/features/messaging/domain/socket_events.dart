@@ -1,3 +1,5 @@
+import 'reaction_model.dart';
+
 enum SocketStatus { disconnected, connecting, connected, authError }
 
 class MessageDeletedEvent {
@@ -37,6 +39,20 @@ class TypingEvent {
   factory TypingEvent.fromJson(Map<String, dynamic> json) => TypingEvent(
         threadId: json['threadId'] as String,
         userId: json['userId'] as String,
+      );
+}
+
+class ReactionUpdatedEvent {
+  const ReactionUpdatedEvent({required this.messageId, required this.reactions});
+  final String messageId;
+  final List<ReactionModel> reactions;
+
+  factory ReactionUpdatedEvent.fromJson(Map<String, dynamic> json) =>
+      ReactionUpdatedEvent(
+        messageId: json['message_id'] as String,
+        reactions: (json['reactions'] as List<dynamic>)
+            .map((r) => ReactionModel.fromJson(r as Map<String, dynamic>))
+            .toList(),
       );
 }
 

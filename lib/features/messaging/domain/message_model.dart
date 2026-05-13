@@ -1,3 +1,5 @@
+import 'reaction_model.dart';
+
 class MessageModel {
   const MessageModel({
     required this.id,
@@ -11,6 +13,10 @@ class MessageModel {
     this.clientNonce,
     this.pending = false,
     this.failed = false,
+    this.reactions = const [],
+    this.replyToId,
+    this.replyToBody,
+    this.replyToSenderId,
   });
 
   final String id;
@@ -21,6 +27,10 @@ class MessageModel {
   final DateTime? deletedAt;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final List<ReactionModel> reactions;
+  final String? replyToId;
+  final String? replyToBody;
+  final String? replyToSenderId;
 
   final String? clientNonce;
   final bool pending;
@@ -45,6 +55,12 @@ class MessageModel {
         updatedAt: json['updated_at'] != null
             ? DateTime.parse(json['updated_at'] as String)
             : DateTime.parse(json['created_at'] as String),
+        reactions: (json['reactions'] as List<dynamic>? ?? [])
+            .map((r) => ReactionModel.fromJson(r as Map<String, dynamic>))
+            .toList(),
+        replyToId: json['reply_to_id'] as String?,
+        replyToBody: json['reply_to_body'] as String?,
+        replyToSenderId: json['reply_to_sender_id'] as String?,
       );
 
   MessageModel copyWith({
@@ -54,6 +70,10 @@ class MessageModel {
     String? clientNonce,
     bool? pending,
     bool? failed,
+    List<ReactionModel>? reactions,
+    String? replyToId,
+    String? replyToBody,
+    String? replyToSenderId,
   }) =>
       MessageModel(
         id: id,
@@ -67,5 +87,9 @@ class MessageModel {
         clientNonce: clientNonce ?? this.clientNonce,
         pending: pending ?? this.pending,
         failed: failed ?? this.failed,
+        reactions: reactions ?? this.reactions,
+        replyToId: replyToId ?? this.replyToId,
+        replyToBody: replyToBody ?? this.replyToBody,
+        replyToSenderId: replyToSenderId ?? this.replyToSenderId,
       );
 }

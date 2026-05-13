@@ -106,6 +106,17 @@ class ThreadMessagesNotifier
     });
     ref.onDispose(delSub.cancel);
 
+    final rxSub = socket.reactionUpdated$.listen((event) {
+      final current = state.valueOrNull;
+      if (current == null) return;
+      final idx = current.messages.indexWhere((m) => m.id == event.messageId);
+      if (idx < 0) return;
+      final updated = [...current.messages];
+      updated[idx] = updated[idx].copyWith(reactions: event.reactions);
+      state = AsyncData(current.copyWith(messages: updated));
+    });
+    ref.onDispose(rxSub.cancel);
+
     return _loadInitial(threadId);
   }
 
@@ -173,7 +184,7 @@ class ThreadMessagesNotifier
     return [normalized, ...list];
   }
 
-  Future<String?> sendMessage(String body) async {
+  Future<String?> sendMessage(String body, {String? replyToId, MessageModel? replyToMessage}) async {
     final trimmed = body.trim();
     if (trimmed.isEmpty) return 'Message cannot be empty.';
 
@@ -191,6 +202,9 @@ class ThreadMessagesNotifier
       updatedAt: now,
       clientNonce: nonce,
       pending: true,
+      replyToId: replyToMessage?.id,
+      replyToBody: replyToMessage?.body,
+      replyToSenderId: replyToMessage?.senderId,
     );
 
     final current = state.valueOrNull;
@@ -203,7 +217,7 @@ class ThreadMessagesNotifier
     try {
       final saved = await ref
           .read(messagingRepositoryProvider)
-          .sendMessage(arg, trimmed, clientNonce: nonce);
+          .sendMessage(arg, trimmed, clientNonce: nonce, replyToId: replyToId);
       final next = state.valueOrNull;
       if (next != null) {
         final reconciled = _reconcileSentMessage(
@@ -262,6 +276,36 @@ class ThreadMessagesNotifier
                 : m)
             .toList(),
       ));
+      return null;
+    } catch (e) {
+      return extractMessagingError(e);
+    }
+  }
+
+  Future<String?> addReaction(String messageId, String emoji) async {
+    try {
+      final reactions = await ref
+          .read(messagingRepositoryProvider)
+          .addReaction(messageId, emoji);
+      final current = state.valueOrNull;
+      if (current != null) {
+        final updated = current.messages
+            .map((m) => m.id == messageId ? m.copyWith(reactions: reactions) : m)
+            .toList();
+        state = AsyncData(current.copyWith(messages: updated));
+      }
+      return null;
+    } catch (e) {
+      return extractMessagingError(e);
+    }
+  }
+
+  Future<String?> removeReaction(String messageId, String emoji) async {
+    try {
+      await ref
+          .read(messagingRepositoryProvider)
+          .removeReaction(messageId, emoji);
+      // WS event will update the state; HTTP 204 has no body
       return null;
     } catch (e) {
       return extractMessagingError(e);

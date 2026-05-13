@@ -25,6 +25,7 @@ class MessagingSocket {
   final _typingStartCtrl = StreamController<TypingEvent>.broadcast();
   final _typingStopCtrl = StreamController<TypingEvent>.broadcast();
   final _threadBumpedCtrl = StreamController<ThreadBumpEvent>.broadcast();
+  final _reactionUpdatedCtrl = StreamController<ReactionUpdatedEvent>.broadcast();
 
   Stream<SocketStatus> get status$ => _statusCtrl.stream;
   Stream<MessageModel> get messageNew$ => _messageNewCtrl.stream;
@@ -34,6 +35,7 @@ class MessagingSocket {
   Stream<TypingEvent> get typingStart$ => _typingStartCtrl.stream;
   Stream<TypingEvent> get typingStop$ => _typingStopCtrl.stream;
   Stream<ThreadBumpEvent> get threadBumped$ => _threadBumpedCtrl.stream;
+  Stream<ReactionUpdatedEvent> get reactionUpdated$ => _reactionUpdatedCtrl.stream;
 
   bool get isConnected => _socket?.connected ?? false;
 
@@ -134,6 +136,13 @@ class MessagingSocket {
         );
       }
     });
+    socket.on('reaction:updated', (data) {
+      if (data is Map) {
+        _reactionUpdatedCtrl.add(
+          ReactionUpdatedEvent.fromJson(Map<String, dynamic>.from(data)),
+        );
+      }
+    });
 
     _socket = socket;
     socket.connect();
@@ -189,6 +198,7 @@ class MessagingSocket {
       _typingStartCtrl.close(),
       _typingStopCtrl.close(),
       _threadBumpedCtrl.close(),
+      _reactionUpdatedCtrl.close(),
     ]);
   }
 

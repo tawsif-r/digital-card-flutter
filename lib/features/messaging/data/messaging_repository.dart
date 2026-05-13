@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import '../../../shared/domain/paged_result.dart';
 import '../domain/message_model.dart';
 import '../domain/messages_page.dart';
+import '../domain/reaction_model.dart';
 import '../domain/thread_model.dart';
 import '../domain/thread_with_peer.dart';
 
@@ -62,12 +63,14 @@ class MessagingRepository {
     String threadId,
     String body, {
     String? clientNonce,
+    String? replyToId,
   }) async {
     final res = await _dio.post<Map<String, dynamic>>(
       '/messaging/threads/$threadId/messages',
       data: {
         'body': body,
         if (clientNonce != null) 'clientNonce': clientNonce,
+        if (replyToId != null) 'replyToId': replyToId,
       },
     );
     return MessageModel.fromJson(_extractMessagePayload(res.data));
@@ -114,6 +117,24 @@ class MessagingRepository {
 
   Future<void> deleteMessage(String messageId) async {
     await _dio.delete('/messaging/messages/$messageId');
+  }
+
+  Future<List<ReactionModel>> addReaction(String messageId, String emoji) async {
+    final res = await _dio.post<Map<String, dynamic>>(
+      '/messaging/messages/$messageId/reactions',
+      data: {'emoji': emoji},
+    );
+    final data = res.data!;
+    return (data['reactions'] as List<dynamic>)
+        .map((r) => ReactionModel.fromJson(r as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> removeReaction(String messageId, String emoji) async {
+    await _dio.delete(
+      '/messaging/messages/$messageId/reactions',
+      data: {'emoji': emoji},
+    );
   }
 
   Future<DateTime> markRead(String threadId, {DateTime? lastReadAt}) async {
