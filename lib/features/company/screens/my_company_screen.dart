@@ -17,7 +17,7 @@ class MyCompanyScreen extends ConsumerWidget {
     return companyAsync.when(
       loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (e, _) => Scaffold(
-        appBar: AppBar(title: const Text('My Company')),
+        appBar: AppBar(title: const Text('My Company'), automaticallyImplyLeading: false),
         body: Center(child: Text('Error: $e')),
       ),
       data: (company) {
@@ -71,7 +71,7 @@ class _CompanyViewState extends ConsumerState<_CompanyView> {
     final issuedAsync = ref.watch(issuedByCompanyProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('My Company')),
+      appBar: AppBar(title: const Text('My Company'), automaticallyImplyLeading: false),
       body: RefreshIndicator(
         onRefresh: () => Future.wait([
           ref.read(companyProvider.notifier).refresh(),
