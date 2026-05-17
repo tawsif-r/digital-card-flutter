@@ -5,13 +5,9 @@ import '../../../core/di/providers.dart';
 import '../../../core/providers/session_provider.dart';
 
 class DashboardState {
-  const DashboardState({
-    required this.activity,
-    required this.pendingTaskCount,
-  });
+  const DashboardState({required this.activity});
 
   final List<ActivityItem> activity;
-  final int pendingTaskCount;
 }
 
 final dashboardRepositoryProvider = Provider<DashboardRepository>((ref) {
@@ -22,20 +18,14 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
   @override
   Future<DashboardState> build() async {
     final userId = ref.watch(userSessionProvider);
-    if (userId == null) return const DashboardState(activity: [], pendingTaskCount: 0);
+    if (userId == null) return const DashboardState(activity: []);
     return _fetch();
   }
 
   Future<DashboardState> _fetch() async {
     final repo = ref.read(dashboardRepositoryProvider);
-    final results = await Future.wait([
-      repo.getActivity(),
-      repo.getTaskCount(),
-    ]);
-    return DashboardState(
-      activity: results[0] as List<ActivityItem>,
-      pendingTaskCount: results[1] as int,
-    );
+    final activity = await repo.getActivity();
+    return DashboardState(activity: activity);
   }
 
   Future<void> refresh() async {

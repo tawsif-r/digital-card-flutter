@@ -14,11 +14,6 @@ class DashboardRepository {
     return MockService.getActivity();
   }
 
-  Future<int> getTaskCount() async {
-    // TODO: wire to real endpoint when backend ready
-    return MockService.getTaskCount();
-  }
-
   Future<List<TaskModel>> getTasks() async {
     if (AppConfig.useMock) return MockService.getTasks();
     final res = await _dio.get('/api/tasks');
