@@ -82,7 +82,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, __, shell) => EmployeeShell(navigationShell: shell),
         branches: [
           StatefulShellBranch(routes: [
-            GoRoute(path: Routes.employeeDashboard, builder: (_, __) => const DashboardScreen(todosRoute: Routes.employeeTodos)),
+            GoRoute(path: Routes.employeeDashboard, builder: (_, __) => const DashboardScreen(pendingRoute: Routes.employeeContactPending)),
           ]),
           StatefulShellBranch(routes: [
             GoRoute(path: Routes.issuedCards, builder: (_, __) => const IssuedCardsScreen()),
@@ -148,7 +148,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             AppShell(navigationShell: navigationShell),
         branches: [
           StatefulShellBranch(routes: [
-            GoRoute(path: Routes.home, builder: (_, __) => const DashboardScreen()),
+            GoRoute(path: Routes.home, builder: (_, __) => const DashboardScreen(pendingRoute: Routes.contactPending)),
           ]),
           StatefulShellBranch(routes: [
             GoRoute(

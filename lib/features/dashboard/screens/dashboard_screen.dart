@@ -4,13 +4,14 @@ import 'package:go_router/go_router.dart';
 import '../providers/dashboard_provider.dart';
 import '../domain/activity_model.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../contacts/providers/contacts_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/router/routes.dart';
 
 class DashboardScreen extends ConsumerWidget {
-  const DashboardScreen({super.key, this.todosRoute});
+  const DashboardScreen({super.key, this.pendingRoute});
 
-  final String? todosRoute;
+  final String? pendingRoute;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -28,13 +29,21 @@ class DashboardScreen extends ConsumerWidget {
       ),
       body: RefreshIndicator(
         color: AppColors.primary,
-        onRefresh: () => ref.read(dashboardProvider.notifier).refresh(),
+        onRefresh: () async {
+          await Future.wait([
+            ref.read(dashboardProvider.notifier).refresh(),
+            ref.refresh(pendingRequestsProvider.future),
+          ]);
+        },
         child: dashAsync.when(
           loading: () => const _DashboardShimmer(),
           error: (_, __) => _ErrorView(
             onRetry: () => ref.read(dashboardProvider.notifier).refresh(),
           ),
-          data: (data) => _DashboardBody(state: data, todosRoute: todosRoute ?? Routes.todos),
+          data: (data) => _DashboardBody(
+            state: data,
+            pendingRoute: pendingRoute ?? Routes.contactPending,
+          ),
         ),
       ),
     );
@@ -42,16 +51,21 @@ class DashboardScreen extends ConsumerWidget {
 }
 
 class _DashboardBody extends ConsumerWidget {
-  const _DashboardBody({required this.state, required this.todosRoute});
+  const _DashboardBody({required this.state, required this.pendingRoute});
 
   final DashboardState state;
-  final String todosRoute;
+  final String pendingRoute;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(authProvider).user;
     final name = user?.name?.split(' ').first ?? 'there';
     final greeting = _greeting();
+    final pendingAsync = ref.watch(pendingRequestsProvider);
+    final pendingCount = pendingAsync.maybeWhen(
+      data: (list) => list.length,
+      orElse: () => 0,
+    );
 
     return CustomScrollView(
       slivers: [
@@ -66,14 +80,18 @@ class _DashboardBody extends ConsumerWidget {
           sliver: SliverToBoxAdapter(
             child: _StatsRow(
               activityCount: state.activity.length,
-              pendingTaskCount: state.pendingTaskCount,
+              pendingRequestCount: pendingCount,
             ),
           ),
         ),
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
           sliver: SliverToBoxAdapter(
-            child: _TasksOverviewCard(pendingCount: state.pendingTaskCount, todosRoute: todosRoute),
+            child: _PendingRequestsCard(
+              pendingCount: pendingCount,
+              isLoading: pendingAsync.isLoading,
+              pendingRoute: pendingRoute,
+            ),
           ),
         ),
         SliverPadding(
@@ -144,10 +162,10 @@ class _WelcomeHeader extends StatelessWidget {
 }
 
 class _StatsRow extends StatelessWidget {
-  const _StatsRow({required this.activityCount, required this.pendingTaskCount});
+  const _StatsRow({required this.activityCount, required this.pendingRequestCount});
 
   final int activityCount;
-  final int pendingTaskCount;
+  final int pendingRequestCount;
 
   @override
   Widget build(BuildContext context) {
@@ -164,9 +182,9 @@ class _StatsRow extends StatelessWidget {
         const SizedBox(width: 12),
         Expanded(
           child: _StatCard(
-            label: 'Pending Tasks',
-            value: pendingTaskCount.toString(),
-            icon: Icons.check_box_outlined,
+            label: 'Pending Requests',
+            value: pendingRequestCount.toString(),
+            icon: Icons.person_add_alt_outlined,
             color: AppColors.rose,
           ),
         ),
@@ -239,11 +257,16 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-class _TasksOverviewCard extends StatelessWidget {
-  const _TasksOverviewCard({required this.pendingCount, required this.todosRoute});
+class _PendingRequestsCard extends StatelessWidget {
+  const _PendingRequestsCard({
+    required this.pendingCount,
+    required this.isLoading,
+    required this.pendingRoute,
+  });
 
   final int pendingCount;
-  final String todosRoute;
+  final bool isLoading;
+  final String pendingRoute;
 
   @override
   Widget build(BuildContext context) {
@@ -266,7 +289,7 @@ class _TasksOverviewCard extends StatelessWidget {
               color: AppColors.primary.withOpacity(0.15),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.check_box_outlined, color: AppColors.primary, size: 22),
+            child: const Icon(Icons.person_add_alt_outlined, color: AppColors.primary, size: 22),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -274,15 +297,17 @@ class _TasksOverviewCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  pendingCount == 0
-                      ? 'All tasks done!'
-                      : '$pendingCount pending task${pendingCount == 1 ? '' : 's'}',
+                  isLoading
+                      ? 'Loading requests…'
+                      : pendingCount == 0
+                          ? 'No pending requests'
+                          : '$pendingCount pending request${pendingCount == 1 ? '' : 's'}',
                   style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w600),
                 ),
                 Text(
                   pendingCount == 0
-                      ? 'No pending tasks right now.'
-                      : 'Stay on top of your to-do list.',
+                      ? "You're all caught up."
+                      : 'Review incoming connection requests.',
                   style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                 ),
               ],
@@ -290,7 +315,7 @@ class _TasksOverviewCard extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           OutlinedButton(
-            onPressed: () => context.go(todosRoute),
+            onPressed: () => context.go(pendingRoute),
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.primary,
               side: const BorderSide(color: AppColors.primary),
@@ -298,7 +323,7 @@ class _TasksOverviewCard extends StatelessWidget {
               minimumSize: Size.zero,
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
-            child: const Text('Go to Todos', style: TextStyle(fontSize: 13)),
+            child: const Text('Review', style: TextStyle(fontSize: 13)),
           ),
         ],
       ),
