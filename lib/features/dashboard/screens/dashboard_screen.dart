@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../providers/dashboard_provider.dart';
-import '../domain/activity_model.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../calendar/domain/calendar_note_model.dart';
+import '../../calendar/providers/calendar_notes_provider.dart';
 import '../../contacts/providers/contacts_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/router/routes.dart';
@@ -15,7 +15,7 @@ class DashboardScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final dashAsync = ref.watch(dashboardProvider);
+    final notesAsync = ref.watch(calendarNotesListProvider);
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
@@ -31,17 +31,17 @@ class DashboardScreen extends ConsumerWidget {
         color: AppColors.primary,
         onRefresh: () async {
           await Future.wait([
-            ref.read(dashboardProvider.notifier).refresh(),
+            ref.refresh(calendarNotesListProvider.future),
             ref.refresh(pendingRequestsProvider.future),
           ]);
         },
-        child: dashAsync.when(
+        child: notesAsync.when(
           loading: () => const _DashboardShimmer(),
           error: (_, __) => _ErrorView(
-            onRetry: () => ref.read(dashboardProvider.notifier).refresh(),
+            onRetry: () => ref.refresh(calendarNotesListProvider.future),
           ),
-          data: (data) => _DashboardBody(
-            state: data,
+          data: (notes) => _DashboardBody(
+            notes: notes,
             pendingRoute: pendingRoute ?? Routes.contactPending,
           ),
         ),
@@ -51,9 +51,9 @@ class DashboardScreen extends ConsumerWidget {
 }
 
 class _DashboardBody extends ConsumerWidget {
-  const _DashboardBody({required this.state, required this.pendingRoute});
+  const _DashboardBody({required this.notes, required this.pendingRoute});
 
-  final DashboardState state;
+  final List<CalendarNoteModel> notes;
   final String pendingRoute;
 
   @override
@@ -79,7 +79,7 @@ class _DashboardBody extends ConsumerWidget {
           padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
           sliver: SliverToBoxAdapter(
             child: _StatsRow(
-              activityCount: state.activity.length,
+              notesCount: notes.length,
               pendingRequestCount: pendingCount,
             ),
           ),
@@ -97,18 +97,18 @@ class _DashboardBody extends ConsumerWidget {
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
           sliver: SliverToBoxAdapter(
-            child: _SectionHeader(title: 'Recent Activity', count: state.activity.length),
+            child: _SectionHeader(title: 'Recent Notes', count: notes.length),
           ),
         ),
-        if (state.activity.isEmpty)
-          const SliverToBoxAdapter(child: _EmptyActivity())
+        if (notes.isEmpty)
+          const SliverToBoxAdapter(child: _EmptyNotes())
         else
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
             sliver: SliverList.separated(
-              itemCount: state.activity.length,
+              itemCount: notes.length,
               separatorBuilder: (_, __) => const SizedBox(height: 8),
-              itemBuilder: (_, i) => _ActivityTile(item: state.activity[i]),
+              itemBuilder: (_, i) => _NoteTile(note: notes[i]),
             ),
           ),
       ],
@@ -162,9 +162,9 @@ class _WelcomeHeader extends StatelessWidget {
 }
 
 class _StatsRow extends StatelessWidget {
-  const _StatsRow({required this.activityCount, required this.pendingRequestCount});
+  const _StatsRow({required this.notesCount, required this.pendingRequestCount});
 
-  final int activityCount;
+  final int notesCount;
   final int pendingRequestCount;
 
   @override
@@ -173,9 +173,9 @@ class _StatsRow extends StatelessWidget {
       children: [
         Expanded(
           child: _StatCard(
-            label: 'Activity',
-            value: activityCount.toString(),
-            icon: Icons.timeline_outlined,
+            label: 'Notes',
+            value: notesCount.toString(),
+            icon: Icons.event_note_outlined,
             color: AppColors.mint,
           ),
         ),
@@ -359,16 +359,15 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-class _ActivityTile extends StatelessWidget {
-  const _ActivityTile({required this.item});
+class _NoteTile extends StatelessWidget {
+  const _NoteTile({required this.note});
 
-  final ActivityItem item;
+  final CalendarNoteModel note;
 
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
-    final (icon, color) = _iconAndColor(item.type);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -384,10 +383,14 @@ class _ActivityTile extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.15),
+              color: AppColors.primary.withOpacity(0.15),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, size: 18, color: color),
+            child: const Icon(
+              Icons.event_note_outlined,
+              size: 18,
+              color: AppColors.primary,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -395,12 +398,12 @@ class _ActivityTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  item.title,
+                  _formatDate(note.date),
                   style: tt.labelMedium?.copyWith(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  item.description,
+                  note.content,
                   style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
@@ -410,7 +413,7 @@ class _ActivityTile extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           Text(
-            _relativeTime(item.timestamp),
+            _relativeTime(note.updatedAt),
             style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
           ),
         ],
@@ -418,13 +421,15 @@ class _ActivityTile extends StatelessWidget {
     );
   }
 
-  (IconData, Color) _iconAndColor(ActivityType type) => switch (type) {
-        ActivityType.message => (Icons.chat_bubble_outline, AppColors.mint),
-        ActivityType.meeting => (Icons.calendar_today_outlined, AppColors.sage),
-        ActivityType.connection => (Icons.people_outline, AppColors.primary),
-        ActivityType.view => (Icons.visibility_outlined, const Color(0xFF7B8FA1)),
-        ActivityType.task => (Icons.check_circle_outline, AppColors.success),
-      };
+  String _formatDate(String iso) {
+    final dt = DateTime.tryParse(iso);
+    if (dt == null) return iso;
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
+  }
 
   String _relativeTime(DateTime dt) {
     final diff = DateTime.now().difference(dt);
@@ -435,8 +440,8 @@ class _ActivityTile extends StatelessWidget {
   }
 }
 
-class _EmptyActivity extends StatelessWidget {
-  const _EmptyActivity();
+class _EmptyNotes extends StatelessWidget {
+  const _EmptyNotes();
 
   @override
   Widget build(BuildContext context) {
@@ -447,12 +452,12 @@ class _EmptyActivity extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.timeline_outlined, size: 48, color: cs.onSurfaceVariant.withOpacity(0.4)),
+          Icon(Icons.event_note_outlined, size: 48, color: cs.onSurfaceVariant.withOpacity(0.4)),
           const SizedBox(height: 16),
-          Text('No recent activity', style: tt.titleMedium),
+          Text('No calendar notes yet', style: tt.titleMedium),
           const SizedBox(height: 8),
           Text(
-            'Activity from messages, meetings, and connections will appear here.',
+            'Notes you add to your calendar will appear here.',
             style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
             textAlign: TextAlign.center,
           ),

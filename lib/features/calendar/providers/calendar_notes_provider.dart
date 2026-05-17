@@ -8,6 +8,15 @@ final calendarNoteRepositoryProvider = Provider<CalendarNoteRepository>((ref) {
   return CalendarNoteRepository(ref.watch(dioProvider));
 });
 
+final calendarNotesListProvider =
+    FutureProvider<List<CalendarNoteModel>>((ref) async {
+  final userId = ref.watch(userSessionProvider);
+  if (userId == null) return const [];
+  final notes = await ref.watch(calendarNoteRepositoryProvider).getAll();
+  notes.sort((a, b) => b.date.compareTo(a.date));
+  return notes;
+});
+
 final calendarNotesProvider =
     AsyncNotifierProvider<CalendarNotesNotifier, Map<String, String>>(
         CalendarNotesNotifier.new);
