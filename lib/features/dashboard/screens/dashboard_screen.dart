@@ -33,6 +33,7 @@ class DashboardScreen extends ConsumerWidget {
           await Future.wait([
             ref.refresh(calendarNotesListProvider.future),
             ref.refresh(pendingRequestsProvider.future),
+            ref.read(contactsProvider.notifier).refresh(),
           ]);
         },
         child: notesAsync.when(
@@ -66,6 +67,12 @@ class _DashboardBody extends ConsumerWidget {
       data: (list) => list.length,
       orElse: () => 0,
     );
+    final contactsAsync = ref.watch(contactsProvider);
+    final connectionsCount = contactsAsync.maybeWhen(
+      data: (s) => s.total,
+      orElse: () => 0,
+    );
+    final connectionsLoading = contactsAsync.isLoading;
 
     return CustomScrollView(
       slivers: [
@@ -81,6 +88,8 @@ class _DashboardBody extends ConsumerWidget {
             child: _StatsRow(
               notesCount: notes.length,
               pendingRequestCount: pendingCount,
+              connectionsCount: connectionsCount,
+              connectionsLoading: connectionsLoading,
             ),
           ),
         ),
@@ -162,10 +171,17 @@ class _WelcomeHeader extends StatelessWidget {
 }
 
 class _StatsRow extends StatelessWidget {
-  const _StatsRow({required this.notesCount, required this.pendingRequestCount});
+  const _StatsRow({
+    required this.notesCount,
+    required this.pendingRequestCount,
+    required this.connectionsCount,
+    required this.connectionsLoading,
+  });
 
   final int notesCount;
   final int pendingRequestCount;
+  final int connectionsCount;
+  final bool connectionsLoading;
 
   @override
   Widget build(BuildContext context) {
@@ -192,7 +208,9 @@ class _StatsRow extends StatelessWidget {
         Expanded(
           child: _StatCard(
             label: 'Connections',
-            value: '24',
+            value: connectionsLoading && connectionsCount == 0
+                ? '…'
+                : connectionsCount.toString(),
             icon: Icons.people_outline,
             color: AppColors.sage,
           ),
