@@ -48,6 +48,8 @@ class Routes {
 
   static String cardDetailPath(String id) => '/cards/$id';
   static String cardEditPath(String id) => '/cards/$id/edit';
+  static const String scan = '/scan';
+
   static String publicCardPath(String slug) => '/c/$slug';
   static String contactDetailPath(String id) => '/contacts/detail/$id';
   static String employeeContactDetailPath(String id) =>

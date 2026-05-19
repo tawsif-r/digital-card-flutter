@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../providers/contacts_provider.dart';
 import '../domain/contact_model.dart';
+import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/providers/session_provider.dart';
 import '../../../shared/widgets/contact_avatar.dart';
@@ -57,6 +59,13 @@ class _AddContactScreenState extends ConsumerState<AddContactScreen> {
       appBar: AppBar(
         title: Text('Find People',
             style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.qr_code_scanner),
+            tooltip: 'Scan card',
+            onPressed: () => context.push(Routes.scan),
+          ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
           child: Divider(height: 1, color: cs.outlineVariant),
