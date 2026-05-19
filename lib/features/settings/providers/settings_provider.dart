@@ -81,6 +81,27 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
     }
   }
 
+  Future<(bool, String?)> uploadPhoto({
+    required List<int> bytes,
+    required String filename,
+  }) async {
+    final previous = state.valueOrNull;
+    try {
+      final url = await ref.read(settingsRepositoryProvider).uploadPhoto(
+            bytes: bytes,
+            filename: filename,
+          );
+      if (previous != null) {
+        state = AsyncData(
+          previous.copyWith(profile: previous.profile.copyWith(photoUrl: url)),
+        );
+      }
+      return (true, null);
+    } catch (e) {
+      return (false, 'Failed to upload photo. Try again.');
+    }
+  }
+
   Future<(bool, String?)> updateSettings(UserSettings settings) async {
     final previous = state.valueOrNull;
     if (previous != null) {

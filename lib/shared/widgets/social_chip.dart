@@ -31,7 +31,7 @@ class SocialChip extends StatelessWidget {
     );
   }
 
-  IconData _iconFor(String platform) => switch (platform.toLowerCase()) {
+  FaIconData _iconFor(String platform) => switch (platform.toLowerCase()) {
         'linkedin' => FontAwesomeIcons.linkedin,
         'github' => FontAwesomeIcons.github,
         'twitter' || 'x' => FontAwesomeIcons.xTwitter,
