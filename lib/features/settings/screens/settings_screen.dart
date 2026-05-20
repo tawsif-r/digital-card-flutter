@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import '../providers/settings_provider.dart';
 import '../domain/user_profile.dart';
 import '../domain/user_settings.dart';
@@ -78,6 +79,7 @@ class _SettingsBodyState extends State<_SettingsBody> {
   bool _savingProfile = false;
   bool _savingPassword = false;
   bool _savingSettings = false;
+  bool _uploadingPhoto = false;
 
   @override
   void initState() {
@@ -118,6 +120,7 @@ class _SettingsBodyState extends State<_SettingsBody> {
         designation: widget.profile.designation,
         department: widget.profile.department,
         company: widget.profile.company,
+        photoUrl: widget.profile.photoUrl,
       );
 
   @override
@@ -130,7 +133,12 @@ class _SettingsBodyState extends State<_SettingsBody> {
           children: [
             ListenableBuilder(
               listenable: Listenable.merge([_fullName, _email]),
-              builder: (_, __) => _ProfileCard(profile: _liveProfile(), role: widget.role),
+              builder: (_, __) => _ProfileCard(
+                profile: _liveProfile(),
+                role: widget.role,
+                uploading: _uploadingPhoto,
+                onTapAvatar: () => _pickAndUploadPhoto(ref),
+              ),
             ),
             const SizedBox(height: 24),
             const Divider(),
@@ -406,6 +414,70 @@ class _SettingsBodyState extends State<_SettingsBody> {
     );
   }
 
+  Future<void> _pickAndUploadPhoto(WidgetRef ref) async {
+    if (_uploadingPhoto) return;
+    final source = await _showPhotoSourceSheet();
+    if (source == null) return;
+
+    final picker = ImagePicker();
+    final XFile? picked = await picker.pickImage(
+      source: source,
+      maxWidth: 1024,
+      maxHeight: 1024,
+      imageQuality: 85,
+    );
+    if (picked == null) return;
+
+    setState(() => _uploadingPhoto = true);
+    final bytes = await picked.readAsBytes();
+    final (ok, err) = await ref.read(settingsProvider.notifier).uploadPhoto(
+          bytes: bytes,
+          filename: picked.name,
+        );
+
+    if (!mounted) return;
+    setState(() => _uploadingPhoto = false);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(ok ? 'Photo updated.' : (err ?? 'Failed to upload photo.')),
+        backgroundColor: ok ? AppColors.success : AppColors.error,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<ImageSource?> _showPhotoSourceSheet() async {
+    return showModalBottomSheet<ImageSource>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Take photo'),
+              onTap: () => Navigator.of(ctx).pop(ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose from gallery'),
+              onTap: () => Navigator.of(ctx).pop(ImageSource.gallery),
+            ),
+            ListTile(
+              leading: const Icon(Icons.close),
+              title: const Text('Cancel'),
+              onTap: () => Navigator.of(ctx).pop(null),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _saveSettings(WidgetRef ref) async {
     setState(() => _savingSettings = true);
 
@@ -431,10 +503,17 @@ class _SettingsBodyState extends State<_SettingsBody> {
 }
 
 class _ProfileCard extends StatelessWidget {
-  const _ProfileCard({required this.profile, this.role});
+  const _ProfileCard({
+    required this.profile,
+    this.role,
+    this.onTapAvatar,
+    this.uploading = false,
+  });
 
   final UserProfile profile;
   final UserRole? role;
+  final VoidCallback? onTapAvatar;
+  final bool uploading;
 
   String _initials(String s) {
     final parts = s.trim().split(' ');
@@ -447,6 +526,7 @@ class _ProfileCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final display = profile.fullName ?? profile.email;
+    final hasPhoto = profile.photoUrl != null && profile.photoUrl!.isNotEmpty;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -457,22 +537,75 @@ class _ProfileCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.15),
-              shape: BoxShape.circle,
-            ),
-            child: Center(
-              child: Text(
-                _initials(display),
-                style: TextStyle(
-                  color: AppColors.primary,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
+          GestureDetector(
+            onTap: uploading ? null : onTapAvatar,
+            child: Stack(
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                    image: hasPhoto
+                        ? DecorationImage(
+                            image: NetworkImage(profile.photoUrl!),
+                            fit: BoxFit.cover,
+                          )
+                        : null,
+                  ),
+                  child: hasPhoto
+                      ? null
+                      : Center(
+                          child: Text(
+                            _initials(display),
+                            style: TextStyle(
+                              color: AppColors.primary,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
                 ),
-              ),
+                if (uploading)
+                  Positioned.fill(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.35),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Center(
+                        child: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  )
+                else if (onTapAvatar != null)
+                  Positioned(
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      width: 20,
+                      height: 20,
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: cs.surface, width: 2),
+                      ),
+                      child: const Icon(
+                        Icons.camera_alt,
+                        size: 11,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
           const SizedBox(width: 14),

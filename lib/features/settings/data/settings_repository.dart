@@ -15,6 +15,7 @@ class SettingsRepository {
       id: data['id'] as String,
       email: data['email'] as String,
       fullName: data['name'] as String?,
+      photoUrl: data['photo_url'] as String?,
     );
   }
 
@@ -34,7 +35,21 @@ class SettingsRepository {
       id: data['id'] as String,
       email: data['email'] as String,
       fullName: data['name'] as String?,
+      photoUrl: data['photo_url'] as String?,
     );
+  }
+
+  Future<String> uploadPhoto({
+    required List<int> bytes,
+    required String filename,
+    String? contentType,
+  }) async {
+    final form = FormData.fromMap({
+      'file': MultipartFile.fromBytes(bytes, filename: filename),
+    });
+    final res = await _dio.post('/users/me/photo', data: form);
+    final data = res.data as Map<String, dynamic>;
+    return data['photo_url'] as String;
   }
 
   Future<void> updatePassword({
